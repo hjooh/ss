@@ -20,26 +20,42 @@ export interface Roommate {
   joinedAt: Date;
 }
 
-export interface Rating {
+export interface Vote {
   roommateId: string;
   apartmentId: string;
-  stars: number;
   timestamp: Date;
 }
 
-export interface Veto {
-  roommateId: string;
-  apartmentId: string;
-  timestamp: Date;
+export interface Matchup {
+  id: string;
+  leftApartment: Apartment;
+  rightApartment: Apartment;
+  votes: Vote[];
+  winner?: string; // apartment ID
+  status: 'active' | 'completed' | 'tie';
+  createdAt: Date;
+  completedAt?: Date;
+}
+
+export interface MatchupLog {
+  matchupId: string;
+  leftApartmentId: string;
+  rightApartmentId: string;
+  winnerId?: string;
+  votes: Vote[];
+  createdAt: Date;
 }
 
 export interface HuntSession {
   id: string;
   code: string;
+  hostId: string;
   roommates: Roommate[];
-  currentApartmentIndex: number;
-  ratings: Rating[];
-  vetos: Veto[];
+  currentMatchup: Matchup | null;
+  availableApartments: Apartment[];
+  eliminatedApartments: Apartment[];
+  matchupLog: MatchupLog[];
+  championApartment: Apartment | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -56,18 +72,101 @@ export interface SocketEvents {
   // Client to server
   'join-session': { code: string; nickname: string };
   'leave-session': { sessionId: string };
-  'rate-apartment': { apartmentId: string; stars: number };
-  'veto-apartment': { apartmentId: string };
-  'next-apartment': { sessionId: string };
-  'previous-apartment': { sessionId: string };
+  'vote-apartment': { apartmentId: string };
+  'force-end-round': {};
+  'host-tiebreak': { winnerId: string };
   
   // Server to client
   'session-joined': { session: HuntSession; currentUser: Roommate };
   'session-updated': { session: HuntSession };
   'roommate-joined': { roommate: Roommate };
   'roommate-left': { roommateId: string };
-  'rating-added': { rating: Rating };
-  'apartment-vetoed': { veto: Veto };
-  'apartment-changed': { apartmentIndex: number };
+  'vote-added': { vote: Vote };
+  'matchup-completed': { matchup: Matchup };
+  'round-force-ended': { matchup: Matchup };
   'error': { message: string };
 }
+
+
+
+
+
+// Aprartment scraping types
+export interface SearchParameters {
+  keyword: string;
+  type: 'forRent' | 'forSale';
+  sort?:
+  | "priceLowToHigh"
+  | "paymentHighToLow"
+  | "paymentLowToHigh"
+  | "newest"
+  | "bedrooms"
+  | "bathrooms"
+  | "squareFeet"
+  | "lotSize";
+}
+
+export interface PricingOptions {
+  price?: {
+    min?: number; 
+    max?: number; 
+  };
+}
+
+
+export type HomeType =
+  | "house"
+  | "townhome"
+  | "multiFamily"
+  | "condo"
+  | "lot"
+  | "apartment"
+  | "manufactured";
+
+export interface HomeTypesOption {
+  /**
+   * An array of home types to filter the listings.
+   * Example: ["apartment", "condo"]
+   */
+  homeTypes?: HomeType[];
+}
+
+// --- Size Specifications ---
+export interface SizeSpecificationsOption {
+  beds?: {
+    min?: number; 
+    max?: number; 
+  };
+  baths?: {
+    min?: number; 
+    max?: number; 
+  };
+  yearBuilt?: {
+    min?: number;
+    max?: number;
+  };
+  lotSize?: {
+    min?: number; 
+    max?: number; 
+  };
+  squareFeet?: {
+    min?: number; 
+    max?: number; 
+  };
+}
+
+
+
+export interface ListingDetailsOption {
+  listingType?: string;             
+  listingPublishOptions?: string[]; 
+  propertyStatus?: string[];        
+  tours?: string[];                 
+  otherAmenities?: string[];        
+  views?: string[];                 
+  pets?: string[];                 
+  basement?: string[];              
+  singleStoryOnly?: boolean;        
+  hide55plusCommunities?: boolean;  
+}
+

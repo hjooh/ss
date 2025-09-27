@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { SessionState, HuntSession, Roommate, Rating, Veto } from '@/types';
+import { SessionState, HuntSession, Roommate, Vote, Matchup } from '@/types';
 import { sampleApartments } from '@/data/apartments';
 
 export const useSocket = () => {
@@ -96,6 +96,21 @@ export const useSocket = () => {
       });
     });
 
+    socket.on('vote-added', ({ vote }: { vote: Vote }) => {
+      console.log('Vote added:', vote);
+      // Session will be updated via session-updated event
+    });
+
+    socket.on('matchup-completed', ({ matchup }: { matchup: Matchup }) => {
+      console.log('Matchup completed:', matchup);
+      // Session will be updated via session-updated event
+    });
+
+    socket.on('round-force-ended', ({ matchup }: { matchup: Matchup }) => {
+      console.log('Round force ended:', matchup);
+      // Session will be updated via session-updated event
+    });
+
     socket.on('error', ({ message }: { message: string }) => {
       console.error('Socket error:', message);
     });
@@ -126,40 +141,41 @@ export const useSocket = () => {
     socketRef.current.emit('join-session', { code, nickname });
   };
 
-  const rateApartment = (apartmentId: string, stars: number) => {
+  const voteApartment = (apartmentId: string) => {
     if (!socketRef.current) {
       console.error('Socket not connected');
       return;
     }
     
-    socketRef.current.emit('rate-apartment', { apartmentId, stars });
+    socketRef.current.emit('vote-apartment', { apartmentId });
   };
 
-  const vetoApartment = (apartmentId: string) => {
+  const forceEndRound = () => {
     if (!socketRef.current) {
       console.error('Socket not connected');
       return;
     }
     
-    socketRef.current.emit('veto-apartment', { apartmentId });
+    socketRef.current.emit('force-end-round');
   };
 
-  const nextApartment = () => {
+  const hostTiebreak = (winnerId: string) => {
     if (!socketRef.current) {
       console.error('Socket not connected');
       return;
     }
     
-    socketRef.current.emit('next-apartment');
+    socketRef.current.emit('host-tiebreak', { winnerId });
   };
 
-  const previousApartment = () => {
+  const startSession = () => {
     if (!socketRef.current) {
       console.error('Socket not connected');
       return;
     }
     
-    socketRef.current.emit('previous-apartment');
+    console.log('Client: Starting session...');
+    socketRef.current.emit('start-session');
   };
 
   return {
@@ -168,9 +184,9 @@ export const useSocket = () => {
     sessionState,
     joinSession,
     createSession,
-    rateApartment,
-    vetoApartment,
-    nextApartment,
-    previousApartment
+    voteApartment,
+    forceEndRound,
+    hostTiebreak,
+    startSession
   };
 };
