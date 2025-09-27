@@ -5,10 +5,11 @@ import { useSocket } from '@/hooks/use-socket';
 import { RoommateList } from './roommate-list';
 import { ApartmentComparison } from './apartment-comparison';
 import { TopContenders } from './top-contenders';
+import { SessionSettings } from './session-settings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, Trophy, Copy, Check } from 'lucide-react';
+import { Users, Trophy, Copy, Check, Settings } from 'lucide-react';
 
 interface HuntSessionProps {
   onLeaveSession: () => void;
@@ -16,9 +17,9 @@ interface HuntSessionProps {
 }
 
 export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) => {
-  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession } = socketHook;
+  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession, updateSettings } = socketHook;
   const [showRoommateList, setShowRoommateList] = useState(false);
-
+  const [showSettings, setShowSettings] = useState(false);
   const [showTooltip, setShowTooltip] = useState(false);
   const [showTopContenders, setShowTopContenders] = useState(false);
 
@@ -30,6 +31,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
   console.log('HuntSession: isHost?', currentUser?.id === session?.hostId);
   console.log('HuntSession: session.hostId:', session?.hostId);
   console.log('HuntSession: currentUser.id:', currentUser?.id);
+  console.log('HuntSession: session.settings:', session?.settings);
 
   if (!session || !currentUser) {
     console.log('HuntSession: Showing loading state');
@@ -185,12 +187,21 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                 
                 {currentUser?.id === session.hostId && (
                   <div className="space-y-4">
-                    <button
-                      onClick={startSession}
-                      className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-                    >
-                      Start Tournament
-                    </button>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={startSession}
+                        className="bg-blue-600 text-white px-8 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                      >
+                        Start Tournament
+                      </button>
+                      <button
+                        onClick={() => setShowSettings(!showSettings)}
+                        className="flex items-center gap-2 bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                      >
+                        <Settings className="h-4 w-4" />
+                        Session Settings
+                      </button>
+                    </div>
                     <div className="text-sm text-gray-500">
                       <p>{session.availableApartments.length} apartments ready to compare</p>
                       <p>{session.roommates.length} roommates joined</p>
@@ -221,6 +232,28 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
               {showTopContenders && (
                 <TopContenders
                   session={session}
+                />
+              )}
+              
+              {showSettings && (
+                <SessionSettings
+                  settings={session.settings || {
+                    requireUnanimousVoting: false,
+                    allowVetoOverride: true,
+                    minimumRatingToPass: 3,
+                    allowMembersToControlNavigation: true,
+                    autoAdvanceOnConsensus: false,
+                    sessionTimeout: 120,
+                    maxRent: null,
+                    minBedrooms: null,
+                    maxCommute: null,
+                    showIndividualRatings: true,
+                    allowGuestJoining: true,
+                    notifyOnNewRatings: true,
+                    notifyOnVetos: true
+                  }}
+                  onUpdateSettings={updateSettings}
+                  isHost={currentUser?.id === session.hostId}
                 />
               )}
             </div>

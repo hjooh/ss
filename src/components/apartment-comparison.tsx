@@ -59,8 +59,8 @@ export const ApartmentComparison = ({
   });
   
   // Get roommate avatars for each side
-  const leftVoters = leftVotes.map(v => roommates.find(r => r.id === v.roommateId)).filter(Boolean);
-  const rightVoters = rightVotes.map(v => roommates.find(r => r.id === v.roommateId)).filter(Boolean);
+  const leftVoters = leftVotes.map(v => roommates.find(r => r.id === v.roommateId)).filter(Boolean) as Roommate[];
+  const rightVoters = rightVotes.map(v => roommates.find(r => r.id === v.roommateId)).filter(Boolean) as Roommate[];
   
   // Count online users
   const onlineUsers = roommates.filter(r => r.isOnline);

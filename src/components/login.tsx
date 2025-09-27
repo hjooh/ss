@@ -1,6 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { User, Lock, Mail } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (username: string, password: string) => void;
@@ -14,6 +20,7 @@ export const Login = ({ onLogin, onSignup }: LoginProps) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,125 +62,167 @@ export const Login = ({ onLogin, onSignup }: LoginProps) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">PadMatch</h1>
-          <p className="text-gray-600">
-            {isSignupMode ? 'Create your account' : 'Welcome back'}
-          </p>
-        </div>
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          {/* Avatar Circle */}
+          <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+            <User className="h-8 w-8 text-white" />
+          </div>
+          
+          <CardTitle className="text-3xl font-bold">PadMatch</CardTitle>
+          <CardDescription className="text-lg">
+            {isSignupMode ? `Welcome to PadMatch!` : `Welcome back to PadMatch!`}
+          </CardDescription>
+        </CardHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Username Input */}
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
-              Username
-            </label>
-            <input
-              type="text"
-              id="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="Enter your username"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-              required
-            />
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Username Input */}
+            <div className="space-y-2">
+              <Label htmlFor="username" className="text-sm font-medium">
+                Username
+              </Label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  id="username"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Enter your username"
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Nickname Input (Signup only) */}
+            {isSignupMode && (
+              <div className="space-y-2">
+                <Label htmlFor="nickname" className="text-sm font-medium">
+                  Nickname
+                </Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="nickname"
+                    type="text"
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                    placeholder="Choose a nickname"
+                    className="pl-10"
+                    maxLength={20}
+                    required={isSignupMode}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Password Input */}
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-sm font-medium">
+                Password
+              </Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="pl-10"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Confirm Password Input (Signup only) */}
+            {isSignupMode && (
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-sm font-medium">
+                  Confirm Password
+                </Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm your password"
+                    className="pl-10"
+                    required={isSignupMode}
+                  />
+                </div>
+                {isSignupMode && password && confirmPassword && password !== confirmPassword && (
+                  <p className="text-sm text-red-600">Passwords do not match</p>
+                )}
+              </div>
+            )}
+
+            {/* Remember Me & Forgot Password (Login only) */}
+            {!isSignupMode && (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="remember"
+                    checked={rememberMe}
+                    onCheckedChange={(checked: boolean) => setRememberMe(checked)}
+                  />
+                  <Label htmlFor="remember" className="text-sm text-gray-600">
+                    Remember me
+                  </Label>
+                </div>
+                <button
+                  type="button"
+                  className="text-sm text-blue-600 hover:text-blue-700 transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
+            )}
+
+            {/* Submit Button */}
+            <Button
+              type="submit"
+              disabled={
+                isLoading ||
+                !username.trim() ||
+                !password.trim() ||
+                (isSignupMode && (!nickname.trim() || password !== confirmPassword))
+              }
+              className="w-full"
+              size="lg"
+            >
+              {isLoading
+                ? (isSignupMode ? 'Creating Account...' : 'Signing In...')
+                : (isSignupMode ? 'Create Account' : 'Sign In')
+              }
+            </Button>
+          </form>
+
+          {/* Toggle Mode */}
+          <div className="mt-6 text-center">
+            <button
+              onClick={toggleMode}
+              className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
+            >
+              {isSignupMode
+                ? 'Already have an account? Sign In'
+                : "Don't have an account? Sign Up"
+              }
+            </button>
           </div>
 
-          {/* Nickname Input (Signup only) */}
-          {isSignupMode && (
-            <div>
-              <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 mb-2">
-                Nickname
-              </label>
-              <input
-                type="text"
-                id="nickname"
-                value={nickname}
-                onChange={(e) => setNickname(e.target.value)}
-                placeholder="Choose a nickname"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                maxLength={20}
-                required={isSignupMode}
-              />
-            </div>
-          )}
-
-          {/* Password Input */}
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-              Password
-            </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-              required
-            />
+          {/* Footer */}
+          <div className="mt-8 text-center">
+            <p className="text-xs text-muted-foreground">
+              Find your perfect apartment together
+            </p>
           </div>
-
-          {/* Confirm Password Input (Signup only) */}
-          {isSignupMode && (
-            <div>
-              <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                id="confirmPassword"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
-                required={isSignupMode}
-              />
-              {isSignupMode && password && confirmPassword && password !== confirmPassword && (
-                <p className="text-sm text-red-600 mt-1">Passwords do not match</p>
-              )}
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={
-              isLoading ||
-              !username.trim() ||
-              !password.trim() ||
-              (isSignupMode && (!nickname.trim() || password !== confirmPassword))
-            }
-            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {isLoading
-              ? (isSignupMode ? 'Creating Account...' : 'Signing In...')
-              : (isSignupMode ? 'Create Account' : 'Sign In')
-            }
-          </button>
-        </form>
-
-        {/* Toggle Mode */}
-        <div className="mt-6 text-center">
-          <button
-            onClick={toggleMode}
-            className="text-blue-600 hover:text-blue-700 text-sm font-medium transition-colors"
-          >
-            {isSignupMode
-              ? 'Already have an account? Sign In'
-              : "Don't have an account? Sign Up"
-            }
-          </button>
-        </div>
-
-        {/* Footer */}
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-400">
-            Find your perfect apartment together
-          </p>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };

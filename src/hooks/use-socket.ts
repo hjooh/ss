@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { SessionState, HuntSession, Roommate, Vote, Matchup } from '@/types';
+import { SessionState, HuntSession, Roommate, Vote, Matchup, LobbySettings } from '@/types';
 import { sampleApartments } from '@/data/apartments';
 
 export const useSocket = () => {
@@ -178,6 +178,16 @@ export const useSocket = () => {
     socketRef.current.emit('start-session');
   };
 
+  const updateSettings = (settings: Partial<LobbySettings>) => {
+    if (!socketRef.current) {
+      console.error('Socket not connected');
+      return;
+    }
+    
+    console.log('Client: Updating settings...', settings);
+    socketRef.current.emit('update-settings', { settings });
+  };
+
   return {
     socket: socketRef.current,
     isConnected,
@@ -187,6 +197,7 @@ export const useSocket = () => {
     voteApartment,
     forceEndRound,
     hostTiebreak,
-    startSession
+    startSession,
+    updateSettings
   };
 };

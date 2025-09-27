@@ -136,6 +136,30 @@ function initializeSocketServer(io) {
         eliminatedApartments: [],
         matchupLog: [],
         championApartment: null,
+        settings: {
+          // Voting settings
+          requireUnanimousVoting: false,
+          allowVetoOverride: true,
+          minimumRatingToPass: 3,
+          
+          // Session management
+          allowMembersToControlNavigation: true,
+          autoAdvanceOnConsensus: false,
+          sessionTimeout: 120, // 2 hours
+          
+          // Filtering preferences
+          maxRent: null,
+          minBedrooms: null,
+          maxCommute: null,
+          
+          // Privacy settings
+          showIndividualRatings: true,
+          allowGuestJoining: true,
+          
+          // Notification preferences
+          notifyOnNewRatings: true,
+          notifyOnVetos: true
+        },
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -524,6 +548,37 @@ function initializeSocketServer(io) {
       
       // Broadcast session update
       io.to(session.id).emit('session-updated', { session });
+    });
+
+    // Handle settings update
+    socket.on('update-settings', ({ settings }) => {
+      const session = Array.from(serverSessionStorage.getAllSessions()).find(s => 
+        socket.rooms.has(s.id)
+      );
+      
+      if (!session) {
+        socket.emit('error', { message: 'Session not found' });
+        return;
+      }
+      
+      // Check if the user is the host
+      const userId = socketToUser.get(socket.id);
+      if (userId !== session.hostId) {
+        socket.emit('error', { message: 'Only the host can update settings' });
+        return;
+      }
+      
+      // Update settings
+      session.settings = { ...session.settings, ...settings };
+      session.updatedAt = new Date();
+      
+      serverSessionStorage.updateSession(session);
+      
+      // Broadcast settings update to all clients in the session
+      io.to(session.id).emit('settings-updated', { settings: session.settings });
+      io.to(session.id).emit('session-updated', { session });
+      
+      console.log('Server: Settings updated for session', session.id);
     });
 
     // Handle disconnection
