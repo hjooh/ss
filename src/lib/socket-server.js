@@ -1,5 +1,37 @@
 const { Server: SocketIOServer } = require('socket.io');
 
+// Avatar generation function (inline since we can't import ES modules in CommonJS)
+const generateRoommateAvatar = (nickname, size = 80) => {
+  // Use a variety of pleasant background colors
+  const backgroundColors = [
+    ['fef3c7', 'fde68a'], // Yellow
+    ['dbeafe', 'bfdbfe'], // Blue
+    ['d1fae5', 'a7f3d0'], // Green
+    ['fce7f3', 'fbcfe8'], // Pink
+    ['e0e7ff', 'c7d2fe'], // Indigo
+    ['fed7d7', 'fbb6ce'], // Rose
+    ['f3e8ff', 'ddd6fe'], // Purple
+    ['d1fae5', 'a7f3d0'], // Emerald
+  ];
+  
+  // Select background color based on nickname hash
+  const hash = nickname.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  const colorIndex = Math.abs(hash) % backgroundColors.length;
+  
+  const params = new URLSearchParams();
+  params.append('seed', nickname);
+  params.append('size', size.toString());
+  backgroundColors[colorIndex].forEach(color => {
+    params.append('backgroundColor', color);
+  });
+  params.append('scale', '110');
+  
+  return `https://api.dicebear.com/9.x/thumbs/svg?${params.toString()}`;
+};
+
 // Server-side session storage
 class ServerSessionStorage {
   constructor() {
@@ -127,7 +159,7 @@ function initializeSocketServer(io) {
         roommates: [{
           id: userId,
           nickname,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${nickname}`,
+          avatar: generateRoommateAvatar(nickname),
           isOnline: true,
           joinedAt: new Date()
         }],
@@ -183,46 +215,67 @@ function initializeSocketServer(io) {
     socket.on('join-session', ({ code, nickname }) => {
       console.log('Server: Joining session with code', code);
       console.log('Server: Join session - socket.id:', socket.id);
+      console.log('Server: All sessions:', serverSessionStorage.getAllSessions().map(s => ({ code: s.code, id: s.id, roommates: s.roommates.length })));
+      
       const session = serverSessionStorage.getSessionByCode(code);
       
       if (!session) {
-        console.error('Session not found for code:', code);
+        console.error('🚫 Session not found for code:', code);
+        console.log('📋 Available session codes:', serverSessionStorage.getAllSessions().map(s => s.code));
         socket.emit('error', { message: 'Session not found' });
         return;
       }
       
       console.log('Server: Join session - found session:', session.id);
       
-      const userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      const newRoommate = {
+      // Reuse existing roommate if nickname matches (case-insensitive)
+      const existing = session.roommates.find(
+        r => r.nickname && r.nickname.toLowerCase() === String(nickname).toLowerCase()
+      );
+
+      let userId;
+      let joinedRoommate;
+      if (existing) {
+        // Preserve the original user ID to maintain host status
+        existing.isOnline = true;
+        existing.joinedAt = existing.joinedAt || new Date();
+        userId = existing.id; // Keep the original ID!
+        joinedRoommate = existing;
+        console.log('Server: Reusing existing roommate', existing.nickname, 'with ID', userId);
+      } else {
+        userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        joinedRoommate = {
         id: userId,
         nickname,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${nickname}`,
+          avatar: generateRoommateAvatar(nickname),
         isOnline: true,
         joinedAt: new Date()
       };
-      
-      session.roommates.push(newRoommate);
+        session.roommates.push(joinedRoommate);
+        console.log('Server: Created new roommate', nickname, 'with ID', userId);
+      }
       session.updatedAt = new Date();
       
       serverSessionStorage.updateSession(session);
       socket.join(session.id);
       
-      // Map this socket to the user
+      // Map socket to the (existing or new) user id
       socketToUser.set(socket.id, userId);
       console.log('Server: Session joined - mapped socket', socket.id, 'to user', userId);
-      console.log('Server: Session joined - socketToUser map after join:', Array.from(socketToUser.entries()));
-      
-      // Notify all clients in the session about the new roommate
-      socket.to(session.id).emit('roommate-joined', { roommate: newRoommate });
+
+      // Notify others only if this is a brand new roommate
+      if (!existing) {
+        socket.to(session.id).emit('roommate-joined', { roommate: joinedRoommate });
+      }
       
       // Send session data to the joining client
       socket.emit('session-joined', {
         session,
-        currentUser: newRoommate
+        currentUser: joinedRoommate
       });
       
       console.log('Server: Join session - completed for user', userId);
+      console.log('Server: Session host is', session.hostId, ', current user is', userId, ', is host?', session.hostId === userId);
     });
 
     // Vote for an apartment in the current matchup
@@ -263,7 +316,16 @@ function initializeSocketServer(io) {
         return;
       }
 
-      console.log('Server: Vote - before removal, votes:', session.currentMatchup.votes);
+      console.log('Server: Vote - before processing, votes:', session.currentMatchup.votes);
+      
+      // Check if user already voted for this apartment
+      const existingVote = session.currentMatchup.votes.find(v => v.roommateId === currentUser.id);
+      const isVotingForSameApartment = existingVote && existingVote.apartmentId === apartmentId;
+      
+      console.log('Server: Vote - existingVote:', existingVote);
+      console.log('Server: Vote - isVotingForSameApartment:', isVotingForSameApartment);
+      console.log('Server: Vote - currentUser.id:', currentUser.id);
+      console.log('Server: Vote - apartmentId:', apartmentId);
       
       // Remove existing vote from this user
       session.currentMatchup.votes = session.currentMatchup.votes.filter(
@@ -271,14 +333,21 @@ function initializeSocketServer(io) {
       );
       
       console.log('Server: Vote - after removal, votes:', session.currentMatchup.votes);
+      console.log('Server: Vote - isVotingForSameApartment:', isVotingForSameApartment);
       
-      // Add new vote
-      const vote = {
-        roommateId: currentUser.id,
-        apartmentId,
-        timestamp: new Date()
-      };
-      session.currentMatchup.votes.push(vote);
+      // Only add new vote if user is not clicking the same apartment (i.e., they want to remove their vote)
+      if (!isVotingForSameApartment) {
+        const vote = {
+          roommateId: currentUser.id,
+          apartmentId,
+          timestamp: new Date()
+        };
+        session.currentMatchup.votes.push(vote);
+        console.log('Server: Vote - added new vote for different apartment');
+      } else {
+        console.log('Server: Vote - removed vote (user clicked same apartment)');
+      }
+      
       session.updatedAt = new Date();
       
       console.log('Server: Vote - final votes:', session.currentMatchup.votes);
@@ -289,85 +358,158 @@ function initializeSocketServer(io) {
       const onlineUsers = session.roommates.filter(r => r.isOnline);
       const hasVoted = session.currentMatchup.votes.length === onlineUsers.length;
       
-      if (hasVoted) {
-        // Determine winner
-        const leftVotes = session.currentMatchup.votes.filter(v => v.apartmentId === session.currentMatchup.leftApartment.id).length;
-        const rightVotes = session.currentMatchup.votes.filter(v => v.apartmentId === session.currentMatchup.rightApartment.id).length;
+      // If countdown was running but now not all users have voted, cancel countdown
+      if (session.currentMatchup.status === 'counting-down' && !hasVoted) {
+        session.currentMatchup.status = 'active';
+        session.currentMatchup.countdownSeconds = undefined;
+        session.currentMatchup.countdownStartTime = undefined;
         
-        let winnerId;
-        let status = 'completed';
-        
-        if (leftVotes > rightVotes) {
-          winnerId = session.currentMatchup.leftApartment.id;
-        } else if (rightVotes > leftVotes) {
-          winnerId = session.currentMatchup.rightApartment.id;
-        } else {
-          status = 'tie';
-        }
-        
-        session.currentMatchup.winner = winnerId;
-        session.currentMatchup.status = status;
-        session.currentMatchup.completedAt = new Date();
-        
-        // Log the matchup
-        const matchupLog = {
-          matchupId: session.currentMatchup.id,
-          leftApartmentId: session.currentMatchup.leftApartment.id,
-          rightApartmentId: session.currentMatchup.rightApartment.id,
-          winnerId,
-          votes: [...session.currentMatchup.votes],
-          createdAt: session.currentMatchup.createdAt
-        };
-        session.matchupLog.push(matchupLog);
-        
-        // Update session with results
-        if (winnerId) {
-          const winner = winnerId === session.currentMatchup.leftApartment.id 
-            ? session.currentMatchup.leftApartment 
-            : session.currentMatchup.rightApartment;
-          
-          // Move loser to eliminated
-          const loser = winnerId === session.currentMatchup.leftApartment.id 
-            ? session.currentMatchup.rightApartment 
-            : session.currentMatchup.leftApartment;
-          session.eliminatedApartments.push(loser);
-          
-          // Set winner as champion (or keep existing champion)
-          if (!session.championApartment) {
-            session.championApartment = winner;
-          }
-          
-          // Create next matchup if apartments remain
-          if (session.availableApartments.length > 0) {
-            const nextApartment = session.availableApartments.shift();
-            const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            
-            session.currentMatchup = {
-              id: nextMatchupId,
-              leftApartment: session.championApartment,
-              rightApartment: nextApartment,
-              votes: [],
-              status: 'active',
-              createdAt: new Date()
-            };
-          } else {
-            // Tournament complete - winner becomes final champion
-            session.championApartment = winner;
-            session.currentMatchup = null;
-          }
-        } else {
-          // Tie - no winner determined, keep current matchup for tiebreak
-          session.currentMatchup.status = 'tie';
+        // Clear any existing countdown interval
+        if (session.countdownInterval) {
+          clearInterval(session.countdownInterval);
+          session.countdownInterval = undefined;
         }
         
         serverSessionStorage.updateSession(session);
         
-        // Broadcast matchup completion
-        io.to(session.id).emit('matchup-completed', { matchup: session.currentMatchup });
+        // Broadcast countdown cancelled
+        io.to(session.id).emit('countdown-cancelled', { 
+          matchup: session.currentMatchup
+        });
       }
       
-      // Broadcast session update
-      io.to(session.id).emit('session-updated', { session });
+      if (hasVoted && session.currentMatchup.status !== 'counting-down') {
+        // Start countdown before ending round
+        session.currentMatchup.status = 'counting-down';
+        session.currentMatchup.countdownSeconds = 5;
+        session.currentMatchup.countdownStartTime = new Date();
+        
+        // Broadcast countdown start
+        io.to(session.id).emit('countdown-started', { 
+          matchup: session.currentMatchup,
+          secondsRemaining: 5 
+        });
+        
+        // Start countdown timer
+        session.countdownInterval = setInterval(() => {
+          const currentSession = serverSessionStorage.getSession(session.id);
+          if (!currentSession || !currentSession.currentMatchup || currentSession.currentMatchup.status !== 'counting-down') {
+            clearInterval(session.countdownInterval);
+            session.countdownInterval = undefined;
+            return;
+          }
+          
+          currentSession.currentMatchup.countdownSeconds--;
+          
+          // Broadcast countdown update
+          io.to(session.id).emit('countdown-update', { 
+            matchup: currentSession.currentMatchup,
+            secondsRemaining: currentSession.currentMatchup.countdownSeconds 
+          });
+          
+          if (currentSession.currentMatchup.countdownSeconds <= 0) {
+            console.log('Server: Countdown reached 0, ending round');
+            clearInterval(session.countdownInterval);
+            session.countdownInterval = undefined;
+            
+            // Now actually end the round
+            const leftVotes = currentSession.currentMatchup.votes.filter(v => v.apartmentId === currentSession.currentMatchup.leftApartment.id).length;
+            const rightVotes = currentSession.currentMatchup.votes.filter(v => v.apartmentId === currentSession.currentMatchup.rightApartment.id).length;
+            
+            let winnerId;
+            let status = 'completed';
+            
+            if (leftVotes > rightVotes) {
+              winnerId = currentSession.currentMatchup.leftApartment.id;
+            } else if (rightVotes > leftVotes) {
+              winnerId = currentSession.currentMatchup.rightApartment.id;
+            } else {
+              status = 'tie';
+            }
+            
+            currentSession.currentMatchup.winner = winnerId;
+            currentSession.currentMatchup.status = status;
+            currentSession.currentMatchup.completedAt = new Date();
+            
+            // Log the matchup
+            const matchupLog = {
+              matchupId: currentSession.currentMatchup.id,
+              leftApartmentId: currentSession.currentMatchup.leftApartment.id,
+              rightApartmentId: currentSession.currentMatchup.rightApartment.id,
+              winnerId,
+              votes: [...currentSession.currentMatchup.votes],
+              createdAt: currentSession.currentMatchup.createdAt
+            };
+            currentSession.matchupLog.push(matchupLog);
+            
+            // Update session with results
+            if (winnerId) {
+              const winner = winnerId === currentSession.currentMatchup.leftApartment.id 
+                ? currentSession.currentMatchup.leftApartment 
+                : currentSession.currentMatchup.rightApartment;
+              
+              // Move loser to eliminated
+              const loser = winnerId === currentSession.currentMatchup.leftApartment.id 
+                ? currentSession.currentMatchup.rightApartment 
+                : currentSession.currentMatchup.leftApartment;
+              currentSession.eliminatedApartments.push(loser);
+              
+              // Set winner as champion (or keep existing champion)
+              if (!currentSession.championApartment) {
+                currentSession.championApartment = winner;
+              }
+              
+              // Create next matchup if apartments remain
+              if (currentSession.availableApartments.length > 0) {
+                const nextApartment = currentSession.availableApartments.shift();
+                const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                
+                currentSession.currentMatchup = {
+                  id: nextMatchupId,
+                  leftApartment: currentSession.championApartment,
+                  rightApartment: nextApartment,
+                  votes: [],
+                  status: 'active',
+                  createdAt: new Date()
+                };
+            } else {
+              // Tournament complete - winner becomes final champion
+              console.log('Server: Tournament completed, setting champion:', winner);
+              currentSession.championApartment = winner;
+              currentSession.currentMatchup = null;
+            }
+            } else {
+              // Tie - no winner determined, keep current matchup for tiebreak
+              currentSession.currentMatchup.status = 'tie';
+            }
+            
+            serverSessionStorage.updateSession(currentSession);
+            
+            // Broadcast matchup completion (only if there's still a matchup)
+            if (currentSession.currentMatchup) {
+              io.to(session.id).emit('matchup-completed', { matchup: currentSession.currentMatchup });
+            } else {
+              // Tournament completed
+              console.log('Server: Broadcasting tournament-completed with champion:', currentSession.championApartment);
+              io.to(session.id).emit('tournament-completed', { 
+                champion: currentSession.championApartment 
+              });
+            }
+            
+            // CRITICAL: Broadcast session-updated after tournament completion
+            const finalSession = serverSessionStorage.getSession(session.id);
+            if (finalSession) {
+              io.to(session.id).emit('session-updated', { session: finalSession });
+            }
+          }
+        }, 1000); // Countdown every 1 second
+      }
+      
+      // Broadcast session update with the updated session
+      const updatedSession = serverSessionStorage.getSession(session.id);
+      if (updatedSession) {
+        io.to(session.id).emit('session-updated', { session: updatedSession });
+      }
     });
 
     // Force end current round (host only)
@@ -567,7 +709,7 @@ function initializeSocketServer(io) {
         socket.emit('error', { message: 'Only the host can update settings' });
         return;
       }
-      
+
       // Update settings
       session.settings = { ...session.settings, ...settings };
       session.updatedAt = new Date();

@@ -15,9 +15,10 @@ interface SessionSettingsProps {
   settings: LobbySettings;
   onUpdateSettings: (settings: Partial<LobbySettings>) => void;
   isHost: boolean;
+  onClose?: () => void;
 }
 
-export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionSettingsProps) => {
+export const SessionSettings = ({ settings, onUpdateSettings, isHost, onClose }: SessionSettingsProps) => {
   const [localSettings, setLocalSettings] = useState<LobbySettings>(settings);
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -25,6 +26,8 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionS
     setLocalSettings(settings);
     setHasChanges(false);
   }, [settings]);
+
+
 
   const handleSettingChange = (key: keyof LobbySettings, value: any) => {
     const newSettings = { ...localSettings, [key]: value };
@@ -35,6 +38,7 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionS
   const handleSave = () => {
     onUpdateSettings(localSettings);
     setHasChanges(false);
+    onClose?.();
   };
 
   const handleReset = () => {
@@ -44,7 +48,7 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionS
 
   if (!isHost) {
     return (
-      <Card className="w-full">
+      <Card className="w-full border-0 rounded-none">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
@@ -65,8 +69,8 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionS
   }
 
   return (
-    <Card className="w-full">
-      <CardHeader>
+    <Card className="w-full border-0 rounded-none">
+        <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Settings className="h-5 w-5" />
           Session Settings
@@ -269,22 +273,23 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost }: SessionS
         </div>
 
         {/* Action Buttons */}
-        <div className="flex gap-3 pt-4 border-t">
+        <div className="flex gap-2 pt-4 border-t">
           <Button
             onClick={handleSave}
             disabled={!hasChanges}
-            className="flex-1"
+            className="flex-1 min-w-0"
           >
             <Save className="h-4 w-4 mr-2" />
-            Save Settings
+            <span className="truncate">Save Settings</span>
           </Button>
           <Button
             variant="outline"
             onClick={handleReset}
             disabled={!hasChanges}
+            className="flex-1 min-w-0"
           >
             <RotateCcw className="h-4 w-4 mr-2" />
-            Reset
+            <span className="truncate">Reset</span>
           </Button>
         </div>
       </CardContent>

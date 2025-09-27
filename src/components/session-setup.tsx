@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/use-socket';
 import { UserProfile } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const { createSession, joinSession, isConnected } = socketHook;
+  const router = useRouter();
 
   const handleCreateSession = async () => {
     if (!currentUser?.nickname) return;
@@ -49,6 +51,18 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
       setIsJoining(false);
     }
   };
+
+  // When a room is active, reflect it in the URL so refresh restores state
+  // Reflect active room in URL once, avoid loops
+  const reflectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const code = socketHook.sessionState.session?.code;
+    if (!code) return;
+    if (reflectedRef.current === code) return;
+    reflectedRef.current = code;
+    router.replace(`/room/${code}`);
+    onSessionJoined?.();
+  }, [socketHook.sessionState.session?.code]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

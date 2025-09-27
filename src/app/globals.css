@@ -1,17 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-/* Removed invalid @theme rule */
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #ededed;
+  --foreground: #0a0a0a;
 }
 
 body {
@@ -20,15 +11,18 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'San Francisco', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 }
 
-/* Ensure all input elements have black text */
-input, textarea, select {
-  color: black !important;
-}
-
-/* Force black text for all input types */
-input[type="text"], 
-input[type="password"], 
-input[type="email"], 
-input[type="number"] {
-  color: black !important;
+/* Custom animations for profile pictures */
+@keyframes popInTwist {
+  0% {
+    transform: scale(0.3) rotate(-15deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1) rotate(var(--final-rotation, 0deg));
+    opacity: 1;
+  }
 }

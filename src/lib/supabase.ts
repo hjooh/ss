@@ -11,6 +11,7 @@ export interface UserProfile {
   user_id: string // References auth.users.id
   username: string
   nickname: string
+  avatar_url?: string // Profile picture URL
   created_at: string
   updated_at: string
 }

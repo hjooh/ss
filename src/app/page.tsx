@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { SessionSetup } from '@/components/session-setup';
 import { HuntSession } from '@/components/hunt-session';
 import { Login } from '@/components/login';
+import { Navbar } from '@/components/navbar';
 import { useSocket } from '@/hooks/use-socket';
 import { authService } from '@/lib/auth';
 import { UserProfile } from '@/lib/supabase';
@@ -15,27 +17,43 @@ export default function Home() {
   const [isInSession, setIsInSession] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const socketHook = useSocket();
+  const router = useRouter();
+  const autoJoinTriedRef = useRef<string | null>(null);
+  const failedJoinAttemptsRef = useRef<Set<string>>(new Set());
 
   const handleSessionJoined = () => {
-    console.log('Session joined, transitioning to hunt session');
+    console.log('Room joined, transitioning to hunt session');
     setIsInSession(true);
   };
 
   const handleLeaveSession = () => {
     console.log('Leaving session');
+    try { (socketHook as any).leaveSession?.(); } catch {}
     setIsInSession(false);
+    try { localStorage.removeItem('padmatch-room-code'); } catch {}
+    router.replace('/');
   };
 
   // Check authentication status on component mount
   useEffect(() => {
     const checkAuth = async () => {
       console.log('🔍 Checking authentication status...');
+      
+      // Check if remember me is enabled first
+      if (!authService.isRememberMeEnabled()) {
+        console.log('❌ Remember me is disabled, signing out user');
+        await authService.signOut();
+        setIsAuthenticated(false);
+        setIsLoading(false);
+        return;
+      }
+      
       const { user, error } = await authService.getCurrentUser();
       
       console.log('🔍 Auth check result:', { user, error });
       
       if (user && !error) {
-        console.log('✅ User is authenticated:', user.username);
+        console.log('User is authenticated:', user.username);
         setCurrentUser(user);
         setIsAuthenticated(true);
       } else {
@@ -53,16 +71,103 @@ export default function Home() {
   useEffect(() => {
     if (socketHook.sessionState.session && socketHook.sessionState.currentUser) {
       setIsInSession(true);
+      // Clear failed attempts when successfully in a session
+      failedJoinAttemptsRef.current.clear();
     } else {
       setIsInSession(false);
     }
   }, [socketHook.sessionState.session, socketHook.sessionState.currentUser]);
 
+  // Listen for socket errors to track failed attempts
+  useEffect(() => {
+    const socket = socketHook.socket;
+    if (!socket) return;
+
+    const handleError = ({ message }: { message: string }) => {
+      if (message === 'Session not found') {
+        const path = typeof window !== 'undefined' ? window.location.pathname : '';
+        const urlCode = path.startsWith('/room/') ? path.split('/room/')[1]?.split('/')[0] : '';
+        let savedCode = '';
+        try { savedCode = localStorage.getItem('padmatch-room-code') || ''; } catch {}
+        const code = (urlCode || savedCode || '').toUpperCase();
+        
+        if (code) {
+          console.log('🚫 Adding', code, 'to failed attempts list');
+          failedJoinAttemptsRef.current.add(code);
+        }
+      }
+    };
+
+    socket.on('error', handleError);
+    return () => {
+      socket.off('error', handleError);
+    };
+  }, [socketHook.socket]);
+
+  // Auto-join a room from URL (/room/[code]) or from localStorage on refresh
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const path = typeof window !== 'undefined' ? window.location.pathname : '';
+    const urlCode = path.startsWith('/room/') ? path.split('/room/')[1]?.split('/')[0] : '';
+    let savedCode = '';
+    try { savedCode = localStorage.getItem('padmatch-room-code') || ''; } catch {}
+    const code = (urlCode || savedCode || '').toUpperCase();
+    
+    console.log('🔄 Auto-join check:', {
+      isAuthenticated,
+      path,
+      urlCode,
+      savedCode,
+      finalCode: code,
+      socketConnected: socketHook.sessionState.isConnected,
+      currentUser: currentUser?.nickname,
+      alreadyTried: autoJoinTriedRef.current,
+      currentSession: socketHook.sessionState.session?.code
+    });
+    
+    if (!code) return;
+    
+    // Avoid repeated attempts for failed sessions
+    if (failedJoinAttemptsRef.current.has(code)) {
+      console.log('⏭️ Skipping auto-join - previously failed:', code);
+      return;
+    }
+    
+    // Avoid repeated attempts for the same code within this lifecycle
+    if (autoJoinTriedRef.current === code) {
+      console.log('⏭️ Skipping auto-join - already tried:', code);
+      return;
+    }
+    if (socketHook.sessionState.session?.code === code) {
+      console.log('✅ Already in session:', code);
+      autoJoinTriedRef.current = code;
+      return;
+    }
+    if (!socketHook.sessionState.isConnected) {
+      console.log('❌ Socket not connected yet');
+      return;
+    }
+    if (!currentUser?.nickname) {
+      console.log('❌ No current user nickname');
+      return;
+    }
+    
+    // Try to join the room
+    try {
+      console.log('🚀 Auto-joining session:', code, 'with user:', currentUser.nickname);
+      // @ts-ignore - access joinSession from hook
+      (socketHook as any).joinSession?.(code, currentUser.nickname);
+      autoJoinTriedRef.current = code;
+    } catch (e) {
+      console.error('Auto-join failed', e);
+    }
+  }, [isAuthenticated, socketHook.sessionState.isConnected, currentUser?.nickname]);
+
   // Authentication handlers
-  const handleLogin = async (username: string, password: string) => {
+  const handleLogin = async (username: string, password: string, rememberMe?: boolean) => {
     setAuthError(null);
     
-    const { user, error: authError } = await authService.signIn(username, password);
+    const { user, error: authError } = await authService.signIn(username, password, rememberMe);
     
     if (authError) {
       setAuthError(authError);
@@ -96,6 +201,17 @@ export default function Home() {
     setCurrentUser(null);
     setIsAuthenticated(false);
     setIsInSession(false);
+  };
+
+  const handleNavigateHome = () => {
+    console.log('🏠 Navigating to home - clearing session');
+    try { 
+      (socketHook as any).leaveSession?.(); 
+      localStorage.removeItem('padmatch-room-code');
+      autoJoinTriedRef.current = null; // Reset auto-join attempts
+    } catch {}
+    setIsInSession(false);
+    router.push('/');
   };
 
   console.log('Rendering Home, isAuthenticated:', isAuthenticated, 'isInSession:', isInSession);
@@ -134,6 +250,7 @@ export default function Home() {
   // Show main app flow if authenticated
   return (
     <>
+      <Navbar currentUser={currentUser} onLogout={handleLogout} onNavigateHome={handleNavigateHome} />
       {isInSession ? (
         <HuntSession onLeaveSession={handleLeaveSession} socketHook={socketHook} />
       ) : (

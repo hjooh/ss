@@ -32,9 +32,11 @@ export interface Matchup {
   rightApartment: Apartment;
   votes: Vote[];
   winner?: string; // apartment ID
-  status: 'active' | 'completed' | 'tie';
+  status: 'active' | 'completed' | 'tie' | 'counting-down';
   createdAt: Date;
   completedAt?: Date;
+  countdownSeconds?: number;
+  countdownStartTime?: Date;
 }
 
 export interface MatchupLog {
@@ -111,6 +113,10 @@ export interface SocketEvents {
   'vote-added': { vote: Vote };
   'matchup-completed': { matchup: Matchup };
   'round-force-ended': { matchup: Matchup };
+  'countdown-started': { matchup: Matchup; secondsRemaining: number };
+  'countdown-update': { matchup: Matchup; secondsRemaining: number };
+  'countdown-cancelled': { matchup: Matchup };
+  'tournament-completed': { champion: Apartment };
   'settings-updated': { settings: LobbySettings };
   'error': { message: string };
 }

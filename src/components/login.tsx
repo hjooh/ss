@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { User, Lock, Mail } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: (username: string, password: string) => void;
+  onLogin: (username: string, password: string, rememberMe?: boolean) => void;
   onSignup: (username: string, password: string, nickname: string) => void;
 }
 
@@ -43,7 +43,7 @@ export const Login = ({ onLogin, onSignup }: LoginProps) => {
     } else {
       setIsLoading(true);
       try {
-        onLogin(username.trim(), password);
+        onLogin(username.trim(), password, rememberMe);
       } catch (error) {
         console.error('Login error:', error);
       } finally {
