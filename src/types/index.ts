@@ -46,6 +46,31 @@ export interface MatchupLog {
   createdAt: Date;
 }
 
+export interface LobbySettings {
+  // Voting settings
+  requireUnanimousVoting: boolean;
+  allowVetoOverride: boolean;
+  minimumRatingToPass: number; // 1-5 stars
+  
+  // Session management
+  allowMembersToControlNavigation: boolean;
+  autoAdvanceOnConsensus: boolean;
+  sessionTimeout: number; // minutes
+  
+  // Filtering preferences
+  maxRent: number | null;
+  minBedrooms: number | null;
+  maxCommute: number | null; // minutes
+  
+  // Privacy settings
+  showIndividualRatings: boolean;
+  allowGuestJoining: boolean;
+  
+  // Notification preferences
+  notifyOnNewRatings: boolean;
+  notifyOnVetos: boolean;
+}
+
 export interface HuntSession {
   id: string;
   code: string;
@@ -56,6 +81,7 @@ export interface HuntSession {
   eliminatedApartments: Apartment[];
   matchupLog: MatchupLog[];
   championApartment: Apartment | null;
+  settings: LobbySettings;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -75,6 +101,7 @@ export interface SocketEvents {
   'vote-apartment': { apartmentId: string };
   'force-end-round': {};
   'host-tiebreak': { winnerId: string };
+  'update-settings': { settings: Partial<LobbySettings> };
   
   // Server to client
   'session-joined': { session: HuntSession; currentUser: Roommate };
@@ -84,6 +111,7 @@ export interface SocketEvents {
   'vote-added': { vote: Vote };
   'matchup-completed': { matchup: Matchup };
   'round-force-ended': { matchup: Matchup };
+  'settings-updated': { settings: LobbySettings };
   'error': { message: string };
 }
 
@@ -156,17 +184,4 @@ export interface SizeSpecificationsOption {
 }
 
 
-
-export interface ListingDetailsOption {
-  listingType?: string;             
-  listingPublishOptions?: string[]; 
-  propertyStatus?: string[];        
-  tours?: string[];                 
-  otherAmenities?: string[];        
-  views?: string[];                 
-  pets?: string[];                 
-  basement?: string[];              
-  singleStoryOnly?: boolean;        
-  hide55plusCommunities?: boolean;  
-}
 

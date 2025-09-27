@@ -1,28 +1,30 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/use-socket';
-import { UserProfile } from './user-profile';
 
 interface SessionSetupProps {
   onSessionJoined: () => void;
   socketHook: ReturnType<typeof useSocket>;
+  onLogout?: () => void;
+  currentUser: { nickname: string; username: string } | null;
 }
 
-export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps) => {
-  const [profile, setProfile] = useState<{ nickname: string; avatar: string }>({ nickname: '', avatar: '' });
+export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUser }: SessionSetupProps) => {
+  const router = useRouter();
   const [sessionCode, setSessionCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const { createSession, joinSession, isConnected } = socketHook;
 
   const handleCreateSession = async () => {
-    if (!profile.nickname.trim()) return;
+    if (!currentUser?.nickname?.trim()) return;
     
-    console.log('Creating session for:', profile.nickname);
+    console.log('Creating session for:', currentUser.nickname);
     setIsCreating(true);
     try {
-      createSession(profile.nickname);
+      createSession(currentUser.nickname);
       // The socket event will handle the transition
       // We'll wait for the session-created event to trigger onSessionJoined
     } catch (error) {
@@ -32,11 +34,11 @@ export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps)
   };
 
   const handleJoinSession = async () => {
-    if (!profile.nickname.trim() || !sessionCode.trim()) return;
+    if (!currentUser?.nickname?.trim() || !sessionCode.trim()) return;
     
     setIsJoining(true);
     try {
-      joinSession(sessionCode.trim().toUpperCase(), profile.nickname);
+      joinSession(sessionCode.trim().toUpperCase(), currentUser.nickname);
       // The socket event will handle the transition
       // We'll wait for the session-joined event to trigger onSessionJoined
     } catch (error) {
@@ -63,9 +65,38 @@ export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps)
 
         {/* User Profile Section */}
         <div className="mb-6">
-          <UserProfile 
-            onProfileUpdate={setProfile}
-          />
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-full bg-gray-200 border-2 border-white shadow-sm flex items-center justify-center">
+                    <span className="text-gray-500 text-xl">👤</span>
+                  </div>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  {currentUser?.nickname ? (
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{currentUser.nickname}</p>
+                      <p className="text-xs text-gray-500">Ready to hunt apartments</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium text-gray-500">Set up your profile</p>
+                      <p className="text-xs text-gray-400">Click edit to customize</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => router.push('/profile')}
+                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+              >
+                {currentUser?.nickname ? 'Edit Profile' : 'Set Up Profile'}
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -73,8 +104,14 @@ export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps)
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Start New Hunt</h3>
             <button
-              onClick={handleCreateSession}
-              disabled={!profile.nickname.trim() || isCreating || !isConnected}
+              onClick={() => {
+                console.log('Create session button clicked');
+                console.log('Current user:', currentUser);
+                console.log('Is connected:', isConnected);
+                console.log('Is creating:', isCreating);
+                handleCreateSession();
+              }}
+              disabled={!currentUser?.nickname?.trim() || isCreating || !isConnected}
               className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >
               {isCreating ? 'Creating...' : 'Create New Hunt Session'}
@@ -98,7 +135,7 @@ export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps)
               />
               <button
                 onClick={handleJoinSession}
-                disabled={!profile.nickname.trim() || !sessionCode.trim() || isJoining || !isConnected}
+                disabled={!currentUser?.nickname?.trim() || !sessionCode.trim() || isJoining || !isConnected}
                 className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
               >
                 {isJoining ? 'Joining...' : 'Join Hunt Session'}
@@ -111,9 +148,17 @@ export const SessionSetup = ({ onSessionJoined, socketHook }: SessionSetupProps)
         </div>
 
         <div className="mt-8 text-center">
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-400 mb-4">
             Real-time collaborative apartment hunting
           </p>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="text-sm text-gray-500 hover:text-gray-700 underline transition-colors"
+            >
+              Sign Out
+            </button>
+          )}
         </div>
       </div>
     </div>
