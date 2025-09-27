@@ -25,8 +25,34 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
   const [budgetMax, setBudgetMax] = useState(2000);
   const [beds, setBeds] = useState(1);
   const [baths, setBaths] = useState(1);
+  const [maxWalkTime, setMaxWalkTime] = useState(15); // minutes
+  const [maxDriveTime, setMaxDriveTime] = useState(20); // minutes
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+  
+  // Tags state
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+
+  // Tags data
+  const tagCategories = {
+    amenities: [
+      'In-Unit Washer/Dryer', 'Washer/Dryer Hookup', 'Dishwasher', 'Fully Furnished',
+      'Air Conditioning', 'Hardwood Floors', 'Stainless Steel Appliances', 'Granite Countertops',
+      'Walk-In Closets', 'Private Patio/Balcony', 'Swimming Pool', 'Fitness Center / Gym',
+      'Clubhouse', 'On-Site Laundry', 'Off-Street Parking', 'Garage Parking',
+      'Utilities Included', 'Fireplace', 'Smart Home Technology', 'Extra Storage', 'Office/Den Space'
+    ],
+    culture: [
+      'Student-Focused', 'Quiet Residential', 'Family-Friendly', 'Social & Lively',
+      'Modern & Upscale', 'Convenient to Downtown', 'Close to Nature/Trails', 'Community-Oriented',
+      'Luxury Living', 'All-Inclusive Living'
+    ],
+    dei: [
+      'Pet-Friendly', 'Wheelchair Accessible', 'Main-Floor Bedroom', 'Equal Housing Opportunity',
+      'On Public Transit Route', 'Roommate Matching Available', 'Individual Leases',
+      'Short-Term Leases Available', 'Community Events'
+    ]
+  };
 
   useEffect(() => {
     if (currentUser) {
@@ -65,6 +91,9 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
         setBudgetMax(prefs.budget?.max || 2000);
         setBeds(prefs.beds || 1);
         setBaths(prefs.baths || 1);
+        setMaxWalkTime(prefs.maxWalkTime || 15);
+        setMaxDriveTime(prefs.maxDriveTime || 20);
+        setSelectedTags(new Set(prefs.tags || []));
       }
     } catch (error) {
       console.error('Error loading preferences:', error);
@@ -126,10 +155,9 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
           budget: { max: budgetMax },
           beds,
           baths,
-          accessibility: { wheelchairAccessible: false, elevatorRequired: false, groundFloorOnly: false },
-          amenities: { parking: false, laundry: false, dishwasher: false, airConditioning: false, heating: true, balcony: false, gym: false, pool: false },
-          roommates: { maxRoommates: 3, petsAllowed: false, smokingAllowed: false },
-          lease: { preferredLeaseLength: 12, utilitiesIncluded: false, furnished: false }
+          maxWalkTime,
+          maxDriveTime,
+          tags: Array.from(selectedTags)
         };
         
         localStorage.setItem('padmatch-preferences', JSON.stringify(preferences));
@@ -159,6 +187,27 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
 
   const handleBathsChange = (value: number) => {
     setBaths(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleWalkTimeChange = (value: number) => {
+    setMaxWalkTime(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDriveTimeChange = (value: number) => {
+    setMaxDriveTime(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const toggleTag = (tag: string) => {
+    const newSelectedTags = new Set(selectedTags);
+    if (newSelectedTags.has(tag)) {
+      newSelectedTags.delete(tag);
+    } else {
+      newSelectedTags.add(tag);
+    }
+    setSelectedTags(newSelectedTags);
     setHasUnsavedChanges(true);
   };
 
@@ -282,47 +331,100 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
                   </div>
                 </div>
 
-                {/* Other Preferences */}
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Beds</label>
-                      <select 
-                        value={beds} 
-                        onChange={(e) => handleBedsChange(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                      >
-                        <option value={0}>Studio</option>
-                        <option value={1}>1 Bed</option>
-                        <option value={2}>2 Beds</option>
-                        <option value={3}>3 Beds</option>
-                        <option value={4}>4+ Beds</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Baths</label>
-                      <select 
-                        value={baths} 
-                        onChange={(e) => handleBathsChange(Number(e.target.value))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
-                      >
-                        <option value={1}>1 Bath</option>
-                        <option value={1.5}>1.5 Baths</option>
-                        <option value={2}>2 Baths</option>
-                        <option value={2.5}>2.5 Baths</option>
-                        <option value={3}>3+ Baths</option>
-                      </select>
-                    </div>
-                  </div>
+                {/* Bedrooms & Bathrooms */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Other Preferences</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option>Pet-friendly</option>
-                      <option>Furnished</option>
-                      <option>Parking included</option>
-                      <option>Utilities included</option>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Beds</label>
+                    <select 
+                      value={beds} 
+                      onChange={(e) => handleBedsChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                    >
+                      <option value={0}>Studio</option>
+                      <option value={1}>1 Bed</option>
+                      <option value={2}>2 Beds</option>
+                      <option value={3}>3 Beds</option>
+                      <option value={4}>4+ Beds</option>
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Baths</label>
+                    <select 
+                      value={baths} 
+                      onChange={(e) => handleBathsChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                    >
+                      <option value={1}>1 Bath</option>
+                      <option value={1.5}>1.5 Baths</option>
+                      <option value={2}>2 Baths</option>
+                      <option value={2.5}>2.5 Baths</option>
+                      <option value={3}>3+ Baths</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Commute Preferences */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Commute to Campus</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Max Walking Time</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={maxWalkTime}
+                          onChange={(e) => handleWalkTimeChange(Number(e.target.value))}
+                          className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                          min="1"
+                          max="60"
+                          step="1"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">min</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Max Driving Time</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={maxDriveTime}
+                          onChange={(e) => handleDriveTimeChange(Number(e.target.value))}
+                          className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                          min="1"
+                          max="120"
+                          step="1"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">min</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Maximum time you're willing to spend commuting to campus</p>
+                </div>
+
+                {/* Tags Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Preferences</h3>
+                  
+                  {Object.entries(tagCategories).map(([category, tags]) => (
+                    <div key={category} className="border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-3 capitalize">{category}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map((tag) => (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag)}
+                            className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                              selectedTags.has(tag)
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

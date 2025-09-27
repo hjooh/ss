@@ -204,7 +204,7 @@ export const ApartmentComparison = ({
                 }}
               >
                 <div 
-                  className={`relative transition-all duration-300 ${
+                  className={`relative transition-all duration-300 group ${
                     isCurrentUser 
                       ? 'ring-4 ring-green-500 ring-offset-2 ring-offset-white rounded-full' 
                       : 'shadow-lg'
@@ -228,6 +228,12 @@ export const ApartmentComparison = ({
                       isCurrentUser ? '' : 'shadow-lg'
                     }`}
                   />
+                  
+                  {/* Tooltip */}
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                    {voter.nickname}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                  </div>
                   {isCurrentUser && (
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center animate-in zoom-in-50 duration-300 ease-out">
                       <span className="text-white text-xs font-bold">✓</span>

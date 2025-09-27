@@ -76,6 +76,7 @@ export interface LobbySettings {
 export interface HuntSession {
   id: string;
   code: string;
+  name: string;
   hostId: string;
   roommates: Roommate[];
   currentMatchup: Matchup | null;

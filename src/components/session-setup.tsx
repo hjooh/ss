@@ -55,14 +55,36 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
   // When a room is active, reflect it in the URL so refresh restores state
   // Reflect active room in URL once, avoid loops
   const reflectedRef = useRef<string | null>(null);
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   useEffect(() => {
     const code = socketHook.sessionState.session?.code;
     if (!code) return;
     if (reflectedRef.current === code) return;
     reflectedRef.current = code;
-    router.replace(`/room/${code}`);
-    onSessionJoined?.();
+    
+    // Debounce router calls to prevent conflicts
+    if (navigationTimeoutRef.current) {
+      clearTimeout(navigationTimeoutRef.current);
+    }
+    navigationTimeoutRef.current = setTimeout(() => {
+      // Only update URL if we're not already on a room page
+      const currentPath = window.location.pathname;
+      if (!currentPath.startsWith('/room/') || currentPath !== `/room/${code}`) {
+        router.replace(`/room/${code}`);
+      }
+      onSessionJoined?.();
+    }, 200);
   }, [socketHook.sessionState.session?.code]);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (navigationTimeoutRef.current) {
+        clearTimeout(navigationTimeoutRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
@@ -96,7 +118,10 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
             </CardHeader>
             <CardContent className="text-center">
               <Button
-                onClick={handleCreateSession}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleCreateSession();
+                }}
                 disabled={!currentUser?.nickname || isCreating || !isConnected}
                 className="w-full"
                 size="lg"
@@ -125,12 +150,21 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
                 type="text"
                 value={sessionCode}
                 onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleJoinSession();
+                  }
+                }}
                 placeholder="Enter session code (e.g., BGM-7XQ)"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black text-center text-lg bg-white"
                 maxLength={10}
               />
               <Button
-                onClick={handleJoinSession}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleJoinSession();
+                }}
                 disabled={!currentUser?.nickname || !sessionCode.trim() || isJoining || !isConnected}
                 className="w-full"
                 size="lg"

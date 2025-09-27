@@ -1,9 +1,17 @@
 'use client';
 
-import Home from '../../page';
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 
 export default function RoomPage() {
-  return <Home />;
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect to home page - let the main page handle room logic
+    router.replace('/');
+  }, [router]);
+
+  return null;
 }
 
 

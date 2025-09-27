@@ -296,6 +296,28 @@ export const useSocket = () => {
     socketRef.current.emit('update-settings', { settings });
   };
 
+  const updateRoomName = (name: string) => {
+    if (!socketRef.current) {
+      console.error('Socket not connected');
+      return;
+    }
+    
+    console.log('🏠 Client: Updating room name to:', name);
+    console.log('🏠 Client: Socket ID:', socketRef.current.id);
+    console.log('🏠 Client: Current session:', sessionState.session?.code);
+    socketRef.current.emit('update-room-name', { name });
+    
+    // Add listeners for the response
+    socketRef.current.once('room-name-updated', ({ name: updatedName }: { name: string }) => {
+      console.log('✅ Room name update confirmed:', updatedName);
+    });
+    
+    // Listen for potential errors
+    socketRef.current.once('error', ({ message }: { message: string }) => {
+      console.error('❌ Room name update failed:', message);
+    });
+  };
+
   const leaveSession = () => {
     const s = sessionState.session;
     if (socketRef.current && s) {
@@ -316,6 +338,7 @@ export const useSocket = () => {
     hostTiebreak,
     startSession,
     updateSettings,
+    updateRoomName,
     leaveSession
   };
 };

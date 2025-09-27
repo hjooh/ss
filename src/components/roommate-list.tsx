@@ -9,11 +9,11 @@ interface RoommateListProps {
 
 export const RoommateList = ({ roommates, currentUser }: RoommateListProps) => {
   return (
-    <div className="bg-white rounded-lg shadow-sm border p-4">
+    <div className="bg-white rounded-lg shadow-sm p-4 fixed top-24 right-10 w-80 z-50">
       <h3 className="text-lg font-semibold text-gray-900 mb-3">Roommates ({roommates.length})</h3>
       <div className="space-y-2">
         {roommates.map((roommate) => (
-          <div
+          <div  
             key={roommate.id}
             className={`flex items-center space-x-3 p-2 rounded-lg ${
               roommate.id === currentUser?.id ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50'

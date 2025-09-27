@@ -22,10 +22,13 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
   // Panel state management (roommates now always visible)
   const [activePanel, setActivePanel] = useState<'contenders' | 'settings' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession, updateSettings } = socketHook;
+  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession, updateSettings, updateRoomName } = socketHook;
   // const [showTooltip, setShowTooltip] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState<string>('');
   const [isCopyDisabled, setIsCopyDisabled] = useState(false);
+  const [isStartingSession, setIsStartingSession] = useState(false);
+  const [isEditingRoomName, setIsEditingRoomName] = useState(false);
+  const [editedRoomName, setEditedRoomName] = useState('');
   const { session, currentUser } = sessionState;
 
   // Generate background when session changes
@@ -110,6 +113,45 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
     }
   };
 
+  const handleStartEditingRoomName = () => {
+    if (currentUser?.id !== session?.hostId) return;
+    setEditedRoomName(session?.name || '');
+    setIsEditingRoomName(true);
+  };
+
+  const handleSaveRoomName = () => {
+    console.log('🏠 handleSaveRoomName called with:', editedRoomName);
+    
+    if (!editedRoomName.trim()) {
+      console.log('❌ Room name is empty');
+      toast.error('Room name cannot be empty');
+      return;
+    }
+    
+    if (editedRoomName.length > 50) {
+      console.log('❌ Room name too long:', editedRoomName.length);
+      toast.error('Room name must be 50 characters or less');
+      return;
+    }
+
+    console.log('✅ Calling updateRoomName with:', editedRoomName.trim());
+    updateRoomName(editedRoomName.trim());
+    setIsEditingRoomName(false);
+  };
+
+  const handleCancelEditingRoomName = () => {
+    setIsEditingRoomName(false);
+    setEditedRoomName('');
+  };
+
+  const handleRoomNameKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSaveRoomName();
+    } else if (e.key === 'Escape') {
+      handleCancelEditingRoomName();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -155,8 +197,46 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
                   <div className="absolute bottom-0 left-0 p-8 text-white">
-                    <h1 className="text-4xl font-bold">New Room</h1>
-                    <p className="text-white/80">
+                    {isEditingRoomName ? (
+                      <div className="flex items-center space-x-3">
+                        <input
+                          type="text"
+                          value={editedRoomName}
+                          onChange={(e) => setEditedRoomName(e.target.value)}
+                          onKeyDown={handleRoomNameKeyPress}
+                          className="text-4xl font-bold bg-white/20 backdrop-blur-sm border-2 border-white/30 rounded-lg px-4 py-2 text-white placeholder-white/70 focus:outline-none focus:border-white/50"
+                          placeholder="Enter room name..."
+                          maxLength={50}
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleSaveRoomName}
+                          className="bg-green-500 hover:bg-green-600 text-white rounded-lg px-4 py-2 font-semibold transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={handleCancelEditingRoomName}
+                          className="bg-red-500 hover:bg-red-600 text-white rounded-lg px-4 py-2 font-semibold transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-4">
+                        <h1 className="text-4xl font-bold">{session.name || 'Apartment Hunt'}</h1>
+                        {currentUser?.id === session.hostId && (
+                          <button
+                            onClick={handleStartEditingRoomName}
+                            className="bg-white/20 hover:bg-white/30 backdrop-blur-sm rounded-lg px-3 py-1 text-sm font-semibold transition-colors"
+                            title="Edit room name"
+                          >
+                            ✏️ Edit
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <p className="text-white/80 mt-2">
                       Click to copy the code: {" "}
                       <button
                         onClick={copySessionCode}
@@ -238,7 +318,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                     minimumRatingToPass: 3,
                     allowMembersToControlNavigation: true,
                     autoAdvanceOnConsensus: false,
-                    sessionTimeout: 120,
+                    sessionTimeout: 60,
                     maxRent: null,
                     minBedrooms: null,
                     maxCommute: null,

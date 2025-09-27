@@ -155,6 +155,7 @@ function initializeSocketServer(io) {
       const session = {
         id: sessionId,
         code,
+        name: `${nickname}'s Hunt`, // Default room name
         hostId: userId, // Track the host user ID
         roommates: [{
           id: userId,
@@ -177,7 +178,7 @@ function initializeSocketServer(io) {
           // Session management
           allowMembersToControlNavigation: true,
           autoAdvanceOnConsensus: false,
-          sessionTimeout: 120, // 2 hours
+          sessionTimeout: 60, // 1 hour
           
           // Filtering preferences
           maxRent: null,
@@ -291,20 +292,33 @@ function initializeSocketServer(io) {
       }
 
       // Get the user ID from the socket mapping
-      const userId = socketToUser.get(socket.id);
+      let userId = socketToUser.get(socket.id);
       console.log('Server: Vote - socket.id:', socket.id);
       console.log('Server: Vote - userId from mapping:', userId);
       console.log('Server: Vote - socketToUser map:', Array.from(socketToUser.entries()));
       
       if (!userId) {
-        socket.emit('error', { message: 'User not found' });
-        return;
+        console.warn('⚠️ WARN: Socket not mapped to user during vote, trying to recover...');
+        
+        // Try to find an online user in this session that matches this socket
+        const onlineUsers = session.roommates.filter(r => r.isOnline);
+        if (onlineUsers.length === 1) {
+          userId = onlineUsers[0].id;
+          socketToUser.set(socket.id, userId);
+          console.log('✅ RECOVERED: Mapped socket', socket.id, 'to user', userId, 'during vote');
+        } else {
+          console.error('🚫 ERROR: Cannot determine user identity during vote');
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
       }
       
       const currentUser = session.roommates.find(r => r.id === userId);
       console.log('Server: Vote - currentUser:', currentUser);
       
       if (!currentUser) {
+        console.error('🚫 ERROR: User not found in session during vote');
+        console.error('🚫 ERROR: userId:', userId, 'roommate IDs:', session.roommates.map(r => r.id));
         socket.emit('error', { message: 'User not found in session' });
         return;
       }
@@ -583,10 +597,28 @@ function initializeSocketServer(io) {
       }
 
       // Get the user ID from the socket mapping
-      const userId = socketToUser.get(socket.id);
+      let userId = socketToUser.get(socket.id);
+      console.log('🐛 DEBUG: Start session - socket.id:', socket.id);
+      console.log('🐛 DEBUG: Start session - userId from mapping:', userId);
+      console.log('🐛 DEBUG: Start session - socketToUser entries:', Array.from(socketToUser.entries()));
+      console.log('🐛 DEBUG: Start session - session roommates:', session.roommates.map(r => ({ id: r.id, nickname: r.nickname, isOnline: r.isOnline })));
+      
       if (!userId) {
-        socket.emit('error', { message: 'User not found' });
-        return;
+        console.warn('⚠️ WARN: Socket not mapped to user, trying to find user in session...');
+        
+        // Try to find an online user in this session that matches this socket
+        // This can happen if the mapping gets lost due to reconnections
+        const onlineUsers = session.roommates.filter(r => r.isOnline);
+        if (onlineUsers.length === 1) {
+          // If there's only one online user, assume it's this socket
+          userId = onlineUsers[0].id;
+          socketToUser.set(socket.id, userId);
+          console.log('✅ RECOVERED: Mapped socket', socket.id, 'to user', userId);
+        } else {
+          console.error('🚫 ERROR: Cannot determine user identity - multiple or no online users');
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
       }
       
       const currentUser = session.roommates.find(r => r.id === userId);
@@ -595,6 +627,9 @@ function initializeSocketServer(io) {
       console.log('Server: Start session - all roommates:', session.roommates);
       
       if (!currentUser) {
+        console.error('🚫 ERROR: User ID found in mapping but not in session roommates');
+        console.error('🚫 ERROR: Looking for userId:', userId);
+        console.error('🚫 ERROR: Available roommate IDs:', session.roommates.map(r => r.id));
         socket.emit('error', { message: 'User not found in session' });
         return;
       }
@@ -721,6 +756,112 @@ function initializeSocketServer(io) {
       io.to(session.id).emit('session-updated', { session });
       
       console.log('Server: Settings updated for session', session.id);
+    });
+
+    // Update room name (host only)
+    socket.on('update-room-name', ({ name }) => {
+      console.log('🏠 UPDATE-ROOM-NAME: Received request to update room name to:', name);
+      console.log('🏠 UPDATE-ROOM-NAME: Socket ID:', socket.id);
+      console.log('🏠 UPDATE-ROOM-NAME: Socket rooms:', Array.from(socket.rooms));
+      
+      let session = Array.from(serverSessionStorage.getAllSessions()).find(s => 
+        socket.rooms.has(s.id)
+      );
+      
+      console.log('🏠 UPDATE-ROOM-NAME: Found session?', session ? `YES (${session.code})` : 'NO');
+      
+      if (!session) {
+        console.error('🚫 UPDATE-ROOM-NAME: Session not found via room membership');
+        console.warn('🔄 UPDATE-ROOM-NAME: Attempting fallback - find session by user mapping');
+        
+        // Fallback: try to find session by user mapping
+        const userId = socketToUser.get(socket.id);
+        if (userId) {
+          const fallbackSession = Array.from(serverSessionStorage.getAllSessions()).find(s => 
+            s.roommates.some(r => r.id === userId)
+          );
+          
+          if (fallbackSession) {
+            console.log('✅ UPDATE-ROOM-NAME: Found session via user mapping fallback:', fallbackSession.code);
+            // Re-join the socket to the session room
+            socket.join(fallbackSession.id);
+            console.log('🔄 UPDATE-ROOM-NAME: Re-joined socket to room', fallbackSession.id);
+            // Continue with this session
+            session = fallbackSession;
+          }
+        }
+        
+        if (!session) {
+          console.error('🚫 UPDATE-ROOM-NAME: No session found via fallback either');
+          socket.emit('error', { message: 'Session not found' });
+          return;
+        }
+      }
+
+      // Get the user ID from the socket mapping
+      let userId = socketToUser.get(socket.id);
+      console.log('🏠 UPDATE-ROOM-NAME: User ID from mapping:', userId);
+      console.log('🏠 UPDATE-ROOM-NAME: Socket to user mapping:', Array.from(socketToUser.entries()));
+      
+      if (!userId) {
+        console.warn('⚠️ UPDATE-ROOM-NAME: Socket not mapped to user, trying to recover...');
+        
+        // Try to find an online user in this session that matches this socket
+        const onlineUsers = session.roommates.filter(r => r.isOnline);
+        if (onlineUsers.length === 1) {
+          // If there's only one online user, assume it's this socket
+          userId = onlineUsers[0].id;
+          socketToUser.set(socket.id, userId);
+          console.log('✅ UPDATE-ROOM-NAME: Recovered mapping - socket', socket.id, 'to user', userId);
+        } else {
+          console.error('🚫 UPDATE-ROOM-NAME: Cannot determine user identity - multiple or no online users');
+          socket.emit('error', { message: 'User not found' });
+          return;
+        }
+      }
+      
+      const currentUser = session.roommates.find(r => r.id === userId);
+      console.log('🏠 UPDATE-ROOM-NAME: Current user:', currentUser);
+      console.log('🏠 UPDATE-ROOM-NAME: Session host ID:', session.hostId);
+      console.log('🏠 UPDATE-ROOM-NAME: Is user the host?', currentUser?.id === session.hostId);
+      
+      if (!currentUser || currentUser.id !== session.hostId) {
+        console.error('🚫 UPDATE-ROOM-NAME: User is not the host');
+        socket.emit('error', { message: 'Only the host can update the room name' });
+        return;
+      }
+
+      // Validate and sanitize the room name
+      const sanitizedName = name?.trim();
+      console.log('🏠 UPDATE-ROOM-NAME: Sanitized name:', sanitizedName);
+      
+      if (!sanitizedName || sanitizedName.length === 0) {
+        console.error('🚫 UPDATE-ROOM-NAME: Room name is empty');
+        socket.emit('error', { message: 'Room name cannot be empty' });
+        return;
+      }
+      
+      if (sanitizedName.length > 50) {
+        console.error('🚫 UPDATE-ROOM-NAME: Room name too long:', sanitizedName.length);
+        socket.emit('error', { message: 'Room name must be 50 characters or less' });
+        return;
+      }
+
+      // Update room name
+      console.log('✅ UPDATE-ROOM-NAME: Updating room name from', session.name, 'to', sanitizedName);
+      session.name = sanitizedName;
+      session.updatedAt = new Date();
+      
+      serverSessionStorage.updateSession(session);
+      
+      console.log('Server: Room name updated to:', sanitizedName, 'by host:', currentUser.nickname);
+      
+      // Broadcast updated session to all clients
+      io.to(session.id).emit('session-updated', { session });
+      
+      // Send confirmation to the host
+      socket.emit('room-name-updated', { name: sanitizedName });
+
     });
 
     // Handle disconnection

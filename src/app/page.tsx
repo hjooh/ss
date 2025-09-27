@@ -20,6 +20,7 @@ export default function Home() {
   const router = useRouter();
   const autoJoinTriedRef = useRef<string | null>(null);
   const failedJoinAttemptsRef = useRef<Set<string>>(new Set());
+  const navigationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleSessionJoined = () => {
     console.log('Room joined, transitioning to hunt session');
@@ -31,7 +32,14 @@ export default function Home() {
     try { (socketHook as any).leaveSession?.(); } catch {}
     setIsInSession(false);
     try { localStorage.removeItem('padmatch-room-code'); } catch {}
-    router.replace('/');
+    
+    // Debounce navigation calls
+    if (navigationTimeoutRef.current) {
+      clearTimeout(navigationTimeoutRef.current);
+    }
+    navigationTimeoutRef.current = setTimeout(() => {
+      router.replace('/');
+    }, 100);
   };
 
   // Check authentication status on component mount
@@ -211,7 +219,14 @@ export default function Home() {
       autoJoinTriedRef.current = null; // Reset auto-join attempts
     } catch {}
     setIsInSession(false);
-    router.push('/');
+    
+    // Debounce navigation calls
+    if (navigationTimeoutRef.current) {
+      clearTimeout(navigationTimeoutRef.current);
+    }
+    navigationTimeoutRef.current = setTimeout(() => {
+      router.push('/');
+    }, 100);
   };
 
   console.log('Rendering Home, isAuthenticated:', isAuthenticated, 'isInSession:', isInSession);
