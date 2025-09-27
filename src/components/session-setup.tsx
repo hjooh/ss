@@ -1,25 +1,28 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useSocket } from '@/hooks/use-socket';
+import { UserProfile } from '@/lib/supabase';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+// Removed Input import - using regular HTML input
+import { Plus, Users } from 'lucide-react';
 
 interface SessionSetupProps {
   onSessionJoined: () => void;
   socketHook: ReturnType<typeof useSocket>;
   onLogout?: () => void;
-  currentUser: { nickname: string; username: string } | null;
+  currentUser: UserProfile | null;
 }
 
 export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUser }: SessionSetupProps) => {
-  const router = useRouter();
   const [sessionCode, setSessionCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const { createSession, joinSession, isConnected } = socketHook;
 
   const handleCreateSession = async () => {
-    if (!currentUser?.nickname?.trim()) return;
+    if (!currentUser?.nickname) return;
     
     console.log('Creating session for:', currentUser.nickname);
     setIsCreating(true);
@@ -34,7 +37,7 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
   };
 
   const handleJoinSession = async () => {
-    if (!currentUser?.nickname?.trim() || !sessionCode.trim()) return;
+    if (!currentUser?.nickname || !sessionCode.trim()) return;
     
     setIsJoining(true);
     try {
@@ -49,11 +52,12 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">PadMatch</h1>
-          <p className="text-gray-600">Find your perfect apartment together</p>
-          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm mt-4 ${
+      <div className="w-full max-w-4xl">
+        {/* Welcome Header */}
+        <div className="text-center mb-12">
+          <h1 className="text-5xl font-bold text-gray-900 mb-4">Welcome to PadMatch!</h1>
+          <p className="text-xl text-gray-600 mb-6">Find your perfect apartment together</p>
+          <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm ${
             isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
           }`}>
             <div className={`w-2 h-2 rounded-full mr-2 ${
@@ -63,98 +67,79 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
           </div>
         </div>
 
-        {/* User Profile Section */}
-        <div className="mb-6">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-gray-200 border-2 border-white shadow-sm flex items-center justify-center">
-                    <span className="text-gray-500 text-xl">👤</span>
-                  </div>
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  {currentUser?.nickname ? (
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{currentUser.nickname}</p>
-                      <p className="text-xs text-gray-500">Ready to hunt apartments</p>
-                    </div>
-                  ) : (
-                    <div>
-                      <p className="text-sm font-medium text-gray-500">Set up your profile</p>
-                      <p className="text-xs text-gray-400">Click edit to customize</p>
-                    </div>
-                  )}
-                </div>
+        {/* Two Cards Layout */}
+        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+          {/* Create Room Card */}
+          <Card className="p-8 hover:shadow-lg transition-shadow">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
+                <Plus className="h-8 w-8 text-white" />
               </div>
-
-              <button
-                onClick={() => router.push('/profile')}
-                className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+              <CardTitle className="text-2xl font-bold text-gray-900">Create Room</CardTitle>
+              <CardDescription className="text-gray-600">
+                Start a new apartment hunting session
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-center">
+              <Button
+                onClick={handleCreateSession}
+                disabled={!currentUser?.nickname || isCreating || !isConnected}
+                className="w-full"
+                size="lg"
               >
-                {currentUser?.nickname ? 'Edit Profile' : 'Set Up Profile'}
-              </button>
-            </div>
-          </div>
-        </div>
+                {isCreating ? 'Creating...' : 'Create New Hunt Session'}
+              </Button>
+              <p className="text-sm text-gray-500 mt-4">
+                You'll get a code to share with your roommates
+              </p>
+            </CardContent>
+          </Card>
 
-        <div className="space-y-6">
-          {/* Create Session */}
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Start New Hunt</h3>
-            <button
-              onClick={() => {
-                console.log('Create session button clicked');
-                console.log('Current user:', currentUser);
-                console.log('Is connected:', isConnected);
-                console.log('Is creating:', isCreating);
-                handleCreateSession();
-              }}
-              disabled={!currentUser?.nickname?.trim() || isCreating || !isConnected}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {isCreating ? 'Creating...' : 'Create New Hunt Session'}
-            </button>
-            <p className="text-sm text-gray-500 mt-2 text-center">
-              You'll get a code to share with your roommates
-            </p>
-          </div>
-
-          {/* Join Session */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Join Existing Hunt</h3>
-            <div className="space-y-3">
+          {/* Join Room Card */}
+          <Card className="p-8 hover:shadow-lg transition-shadow">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto mb-4 w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
+                <Users className="h-8 w-8 text-white" />
+              </div>
+              <CardTitle className="text-2xl font-bold text-gray-900">Join Room</CardTitle>
+              <CardDescription className="text-gray-600">
+                Enter a session code to join an existing hunt
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <input
                 type="text"
                 value={sessionCode}
                 onChange={(e) => setSessionCode(e.target.value.toUpperCase())}
                 placeholder="Enter session code (e.g., BGM-7XQ)"
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black"
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors text-black text-center text-lg bg-white"
                 maxLength={10}
               />
-              <button
+              <Button
                 onClick={handleJoinSession}
-                disabled={!currentUser?.nickname?.trim() || !sessionCode.trim() || isJoining || !isConnected}
-                className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                disabled={!currentUser?.nickname || !sessionCode.trim() || isJoining || !isConnected}
+                className="w-full"
+                size="lg"
+                variant="secondary"
               >
                 {isJoining ? 'Joining...' : 'Join Hunt Session'}
-              </button>
-            </div>
-            <p className="text-sm text-gray-500 mt-2 text-center">
-              Ask your roommate for the session code
-            </p>
-          </div>
+              </Button>
+              <p className="text-sm text-gray-500 text-center">
+                Ask your roommate for the session code
+              </p>
+            </CardContent>
+          </Card>
         </div>
 
-        <div className="mt-8 text-center">
-          <p className="text-xs text-gray-400 mb-4">
+        {/* Footer */}
+        <div className="mt-12 text-center">
+          <p className="text-sm text-gray-500 mb-4">
             Real-time collaborative apartment hunting
           </p>
           {onLogout && (
             <button
               onClick={onLogout}
-              className="text-sm text-gray-500 hover:text-gray-700 underline transition-colors"
+              className="text-sm text-gray-500 hover:text-gray-700 underline"
             >
               Sign Out
             </button>
