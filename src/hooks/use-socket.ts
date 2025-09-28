@@ -42,7 +42,7 @@ export const useSocket = () => {
 
   useEffect(() => {
     // Initialize socket connection
-    const socket = io(process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000', {
+    const socket = io({
       transports: ['websocket', 'polling'],
       autoConnect: true,
       reconnection: true,
@@ -54,15 +54,20 @@ export const useSocket = () => {
 
     // Connection events
     socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
+      console.log('✅ Socket connected:', socket.id);
       setIsConnected(true);
       setSessionState(prev => ({ ...prev, isConnected: true }));
     });
 
-    socket.on('disconnect', () => {
-      console.log('Socket disconnected');
+    socket.on('disconnect', (reason) => {
+      console.log('❌ Socket disconnected:', reason);
       setIsConnected(false);
       setSessionState(prev => ({ ...prev, isConnected: false }));
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('🚫 Socket connection error:', error);
+      setError(`Connection failed: ${error.message}`);
     });
 
     // Session events

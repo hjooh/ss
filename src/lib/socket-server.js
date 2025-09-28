@@ -750,6 +750,28 @@ function initializeSocketServer(io) {
   // Map socket IDs to user IDs
   const socketToUser = new Map();
   
+  // Helper function to find user by socket in any session
+  const findUserBySocket = (socket) => {
+    const socketId = socket.id;
+    const userId = socketToUser.get(socketId);
+    if (userId) return userId;
+    
+    // Try to find user by checking all sessions for this socket's rooms
+    const allSessions = serverSessionStorage.getAllSessions();
+    for (const session of allSessions) {
+      if (socket.rooms.has(session.id)) {
+        const onlineUsers = session.roommates.filter(r => r.isOnline);
+        if (onlineUsers.length === 1) {
+          const foundUserId = onlineUsers[0].id;
+          socketToUser.set(socketId, foundUserId);
+          console.log('✅ Recovered user mapping for socket:', socketId, '-> user:', foundUserId);
+          return foundUserId;
+        }
+      }
+    }
+    return null;
+  };
+  
   io.on('connection', (socket) => {
     console.log('🔌 Client connected:', socket.id);
     console.log('🔌 Total connections:', io.engine.clientsCount);
@@ -976,25 +998,15 @@ function initializeSocketServer(io) {
       session.currentMatchup._processingVote = true;
 
       // Get the user ID from the socket mapping
-      let userId = socketToUser.get(socket.id);
+      let userId = findUserBySocket(socket);
       console.log('Server: Vote - socket.id:', socket.id);
       console.log('Server: Vote - userId from mapping:', userId);
       console.log('Server: Vote - socketToUser map:', Array.from(socketToUser.entries()));
       
       if (!userId) {
-        console.warn('⚠️ WARN: Socket not mapped to user during vote, trying to recover...');
-        
-        // Try to find an online user in this session that matches this socket
-        const onlineUsers = session.roommates.filter(r => r.isOnline);
-        if (onlineUsers.length === 1) {
-          userId = onlineUsers[0].id;
-          socketToUser.set(socket.id, userId);
-          console.log('✅ RECOVERED: Mapped socket', socket.id, 'to user', userId, 'during vote');
-        } else {
-          console.error('🚫 ERROR: Cannot determine user identity during vote');
-          socket.emit('error', { message: 'User not found' });
-          return;
-        }
+        console.error('🚫 ERROR: Cannot determine user identity during vote');
+        socket.emit('error', { message: 'User not found' });
+        return;
       }
       
       const currentUser = session.roommates.find(r => r.id === userId);
@@ -1242,28 +1254,16 @@ function initializeSocketServer(io) {
       }
 
       // Get the user ID from the socket mapping
-      let userId = socketToUser.get(socket.id);
+      let userId = findUserBySocket(socket);
       console.log('🐛 DEBUG: Start session - socket.id:', socket.id);
       console.log('🐛 DEBUG: Start session - userId from mapping:', userId);
       console.log('🐛 DEBUG: Start session - socketToUser entries:', Array.from(socketToUser.entries()));
       console.log('🐛 DEBUG: Start session - session roommates:', session.roommates.map(r => ({ id: r.id, nickname: r.nickname, isOnline: r.isOnline })));
       
       if (!userId) {
-        console.warn('⚠️ WARN: Socket not mapped to user, trying to find user in session...');
-        
-        // Try to find an online user in this session that matches this socket
-        // This can happen if the mapping gets lost due to reconnections
-        const onlineUsers = session.roommates.filter(r => r.isOnline);
-        if (onlineUsers.length === 1) {
-          // If there's only one online user, assume it's this socket
-          userId = onlineUsers[0].id;
-          socketToUser.set(socket.id, userId);
-          console.log('✅ RECOVERED: Mapped socket', socket.id, 'to user', userId);
-        } else {
-          console.error('🚫 ERROR: Cannot determine user identity - multiple or no online users');
-          socket.emit('error', { message: 'User not found' });
-          return;
-        }
+        console.error('🚫 ERROR: Cannot determine user identity - multiple or no online users');
+        socket.emit('error', { message: 'User not found' });
+        return;
       }
       
       const currentUser = session.roommates.find(r => r.id === userId);
@@ -1622,10 +1622,13 @@ function initializeSocketServer(io) {
             console.log('✅ Recovered user mapping:', userId);
           } else {
             console.log('❌ Cannot recover user mapping - multiple or no online users');
-        return;
+            // Don't return here, continue with cleanup even if we can't identify the user
           }
         } else {
           console.log('❌ Session not found for recovery');
+          // Clean up socket mapping and room membership even if session is gone
+          socketToUser.delete(socket.id);
+          socket.leave(sessionId);
           return;
         }
       }
@@ -1633,28 +1636,38 @@ function initializeSocketServer(io) {
       const session = serverSessionStorage.getSession(sessionId);
       if (!session) {
         console.log('Session not found:', sessionId);
+        // Clean up socket mapping and room membership
+        socketToUser.delete(socket.id);
+        socket.leave(sessionId);
         return;
       }
 
-      // Remove user from session
-      const userIndex = session.roommates.findIndex(r => r.id === userId);
-      if (userIndex !== -1) {
-        const user = session.roommates[userIndex];
-        session.roommates.splice(userIndex, 1);
-        
-        // Update session
-        serverSessionStorage.updateSession(session);
-        
-        // Notify other clients in the session
-        socket.to(sessionId).emit('roommate-left', { roommateId: userId });
-        
-        console.log(`User ${user.nickname} left session ${session.code}`);
-        
-        // If no roommates left, delete the session
-        if (session.roommates.length === 0) {
-          serverSessionStorage.deleteSession(sessionId);
-          console.log(`Session ${session.code} deleted - no roommates left`);
+      // Only try to remove user if we have a valid userId
+      if (userId) {
+        // Remove user from session
+        const userIndex = session.roommates.findIndex(r => r.id === userId);
+        if (userIndex !== -1) {
+          const user = session.roommates[userIndex];
+          session.roommates.splice(userIndex, 1);
+          
+          // Update session
+          serverSessionStorage.updateSession(session);
+          
+          // Notify other clients in the session
+          socket.to(sessionId).emit('roommate-left', { roommateId: userId });
+          
+          console.log(`User ${user.nickname} left session ${session.code}`);
+          
+          // If no roommates left, delete the session
+          if (session.roommates.length === 0) {
+            serverSessionStorage.deleteSession(sessionId);
+            console.log(`Session ${session.code} deleted - no roommates left`);
+          }
+        } else {
+          console.log('⚠️ User not found in session roommates, but continuing cleanup');
         }
+      } else {
+        console.log('⚠️ No userId available, skipping user removal but continuing cleanup');
       }
 
       // Remove socket mapping
@@ -1728,6 +1741,10 @@ function initializeSocketServer(io) {
         });
         
         // Remove socket mapping
+        socketToUser.delete(socket.id);
+      } else {
+        console.log('⚠️ No user mapping found for disconnected socket:', socket.id);
+        // Still clean up the socket mapping to prevent memory leaks
         socketToUser.delete(socket.id);
       }
     });
