@@ -29,8 +29,8 @@ const saveSessionToSupabase = async (session) => {
     const roomData = {
       id: session.code, // Use code as the primary key
       'Room Name': session.name,
-      Anon: true, // Default to anonymous
-      Rounds: 10 // Default rounds, will be updated when settings change
+      Anon: !session.settings?.showIndividualRatings, // Use anonymous mode setting
+      Rounds: session.settings?.numberOfApartments || 10 // Use numberOfApartments setting
     };
 
     const { data, error } = await supabase
@@ -65,11 +65,11 @@ const saveRoomToRoom2 = async (session) => {
     // Extract player nicknames from roommates
     const players = session.roommates.map(roommate => roommate.nickname);
     
-    // Get rounds from session settings (default to 10 if not set)
-    const rounds = session.settings?.numberOfRounds || 10;
+    // Get apartments from session settings (default to 10 if not set)
+    const rounds = session.settings?.numberOfApartments || 10;
     
-    // Determine if anonymous (for now, default to true)
-    const anon = true;
+    // Determine if anonymous based on session settings
+    const anon = !session.settings?.showIndividualRatings;
     
     const roomData = {
       id: session.code, // Use room code as UUID
@@ -151,9 +151,9 @@ const updateSessionSettingsInSupabase = async (code, settings) => {
     
     const updateData = {};
 
-    // Update rounds if numberOfRounds is provided
-    if (settings.numberOfRounds !== undefined) {
-      updateData.Rounds = settings.numberOfRounds;
+    // Update apartments if numberOfApartments is provided
+    if (settings.numberOfApartments !== undefined) {
+      updateData.Rounds = settings.numberOfApartments; // Keep Rounds field for backward compatibility
     }
 
     const { error } = await supabase
@@ -361,19 +361,18 @@ const sampleApartments = [
 let cachedApartments = sampleApartments;
 
 // Function to fetch apartments from Supabase database
-const fetchApartmentsFromDatabase = async (numberOfRounds = 10) => {
+const fetchApartmentsFromDatabase = async (numberOfApartments = 10) => {
   if (!supabase) {
     console.warn('⚠️ Supabase not configured, using sample apartments');
-    return getSessionApartments(sampleApartments, numberOfRounds);
+    return getSessionApartments(sampleApartments, numberOfApartments);
   }
 
   try {
     console.log('🔍 Fetching apartments from Supabase database...');
-    console.log(`📊 Requested rounds: ${numberOfRounds}`);
+    console.log(`📊 Requested apartments: ${numberOfApartments}`);
     
     // Calculate how many apartments we need
-    // N rounds = N apartments total (not N+1)
-    const apartmentsNeeded = numberOfRounds;
+    const apartmentsNeeded = numberOfApartments;
     console.log(`📊 Apartments needed: ${apartmentsNeeded}`);
     
     // First, check how many apartments are available in the database
@@ -396,12 +395,12 @@ const fetchApartmentsFromDatabase = async (numberOfRounds = 10) => {
     if (error) {
       console.error('❌ Error fetching apartments from database:', error);
       console.log('🔄 Falling back to sample apartments');
-      return getSessionApartments(sampleApartments, numberOfRounds);
+      return getSessionApartments(sampleApartments, numberOfApartments);
     }
 
     if (!data || data.length === 0) {
       console.warn('⚠️ No apartments found in database, using sample apartments');
-      return getSessionApartments(sampleApartments, numberOfRounds);
+      return getSessionApartments(sampleApartments, numberOfApartments);
     }
 
     console.log(`✅ Found ${data.length} apartments in database`);
@@ -431,21 +430,21 @@ const fetchApartmentsFromDatabase = async (numberOfRounds = 10) => {
     if (apartments.length < apartmentsNeeded) {
       console.warn(`⚠️ Not enough apartments in database (${apartments.length} < ${apartmentsNeeded})`);
       console.log('🔄 Falling back to sample apartments');
-      return getSessionApartments(sampleApartments, numberOfRounds);
+      return getSessionApartments(sampleApartments, numberOfApartments);
     }
 
     // Shuffle and select the needed number
     const shuffled = [...apartments].sort(() => Math.random() - 0.5);
     const selectedApartments = shuffled.slice(0, apartmentsNeeded);
     
-    console.log(`📊 Selected ${selectedApartments.length} apartments for ${numberOfRounds} rounds from database`);
+    console.log(`📊 Selected ${selectedApartments.length} apartments for ${numberOfApartments} rounds from database`);
     console.log(`📊 Selected apartment IDs: ${selectedApartments.map(apt => apt.id).join(', ')}`);
     return selectedApartments;
     
   } catch (error) {
     console.error('❌ Failed to fetch apartments from database:', error);
     console.log('🔄 Falling back to sample apartments');
-    return getSessionApartments(sampleApartments, numberOfRounds);
+    return getSessionApartments(sampleApartments, numberOfApartments);
   }
 };
 
@@ -513,14 +512,228 @@ const generateDescription = (complex) => {
   return complex.description || `${complex.name} - A great place to live with modern amenities and convenient location.`;
 };
 
+// Binary search ranking system functions
+const initializeRankingSystem = (session) => {
+  console.log('🔍 Initializing binary search ranking system...');
+  
+  // Move all apartments to unranked list
+  session.rankingSystem.unrankedApartments = [...session.availableApartments];
+  session.rankingSystem.rankedApartments = [];
+  session.rankingSystem.isRanking = true;
+  session.rankingSystem.rankingProgress = 0;
+  
+  console.log(`📊 Ranking system initialized with ${session.rankingSystem.unrankedApartments.length} apartments`);
+  
+  // Start with first two apartments for initial ranking
+  if (session.rankingSystem.unrankedApartments.length >= 2) {
+    const firstApartment = session.rankingSystem.unrankedApartments.shift();
+    const secondApartment = session.rankingSystem.unrankedApartments.shift();
+    
+    // Create initial comparison
+    session.currentMatchup = {
+      id: `ranking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      leftApartment: firstApartment,
+      rightApartment: secondApartment,
+      votes: [],
+      status: 'active',
+      createdAt: new Date(),
+      isRankingComparison: true
+    };
+    
+    console.log(`🏁 Initial ranking comparison: ${firstApartment.id} vs ${secondApartment.id}`);
+  }
+};
+
+const binarySearchInsert = (apartment, rankedList) => {
+  if (rankedList.length === 0) {
+    return 0;
+  }
+  
+  let left = 0;
+  let right = rankedList.length;
+  
+  while (left < right) {
+    const mid = Math.floor((left + right) / 2);
+    // For now, we'll use a simple comparison - in real implementation,
+    // this would be based on the user's previous voting patterns
+    // or we'd need to ask the user to compare with the middle element
+    const midApartment = rankedList[mid];
+    
+    // This is a placeholder - in real implementation, we'd need user input
+    // to determine if apartment should go before or after midApartment
+    if (apartment.rent < midApartment.rent) {
+      right = mid;
+    } else {
+      left = mid + 1;
+    }
+  }
+  
+  return left;
+};
+
+const processRankingVote = (session, winnerId) => {
+  console.log('🔍 Processing ranking vote...');
+  
+  // Guard clauses to ensure session is valid
+  if (!session) {
+    console.error('❌ Session is undefined in processRankingVote');
+    return;
+  }
+  if (!session.rankingSystem) {
+    console.error('❌ rankingSystem is undefined in processRankingVote');
+    return;
+  }
+  if (!session.currentMatchup) {
+    console.error('❌ currentMatchup is undefined in processRankingVote');
+    return;
+  }
+  
+  const matchup = session.currentMatchup;
+  const winner = winnerId === matchup.leftApartment.id ? matchup.leftApartment : matchup.rightApartment;
+  const loser = winnerId === matchup.leftApartment.id ? matchup.rightApartment : matchup.leftApartment;
+  
+  // Save comparison decision to Supabase
+  saveComparisonToSupabase(session.code, winnerId, loser.id).then(success => {
+    if (success) {
+      console.log('✅ Ranking comparison saved to Supabase');
+    } else {
+      console.warn('⚠️ Failed to save ranking comparison to Supabase, but ranking continues');
+    }
+  });
+  
+  // Track vote counts for each apartment
+  if (!session.rankingSystem.apartmentVoteCounts[winner.id]) {
+    session.rankingSystem.apartmentVoteCounts[winner.id] = 0;
+  }
+  if (!session.rankingSystem.apartmentVoteCounts[loser.id]) {
+    session.rankingSystem.apartmentVoteCounts[loser.id] = 0;
+  }
+  
+  // Add votes from this comparison
+  const winnerVotes = matchup.votes.filter(v => v.apartmentId === winner.id).length;
+  const loserVotes = matchup.votes.filter(v => v.apartmentId === loser.id).length;
+  
+  session.rankingSystem.apartmentVoteCounts[winner.id] += winnerVotes;
+  session.rankingSystem.apartmentVoteCounts[loser.id] += loserVotes;
+  
+  // Track comparison history
+  console.log('🔍 Debug: session.rankingSystem exists:', !!session.rankingSystem);
+  console.log('🔍 Debug: comparisonHistory exists:', !!session.rankingSystem?.comparisonHistory);
+  
+  if (!session.rankingSystem) {
+    console.error('❌ rankingSystem is undefined!');
+    return;
+  }
+  if (!session.rankingSystem.comparisonHistory) {
+    console.log('🔧 Initializing comparisonHistory array');
+    session.rankingSystem.comparisonHistory = [];
+  }
+  session.rankingSystem.comparisonHistory.push({
+    leftApartment: matchup.leftApartment,
+    rightApartment: matchup.rightApartment,
+    winner: winner,
+    loser: loser,
+    winnerVotes: winnerVotes,
+    loserVotes: loserVotes,
+    totalVotes: matchup.votes.length,
+    timestamp: new Date()
+  });
+  
+  // If this is the first comparison, just add both apartments in order
+  if (session.rankingSystem.rankedApartments.length === 0) {
+    session.rankingSystem.rankedApartments.push(winner);
+    session.rankingSystem.rankedApartments.push(loser);
+    console.log(`📊 Initial ranking: ${winner.id} (1st), ${loser.id} (2nd)`);
+  } else {
+    // Use binary search to find the right position for the winner
+    // But first check if the winner is already in the ranked list
+    const winnerAlreadyRanked = session.rankingSystem.rankedApartments.some(apt => apt.id === winner.id);
+    if (!winnerAlreadyRanked) {
+      const insertIndex = binarySearchInsert(winner, session.rankingSystem.rankedApartments);
+      session.rankingSystem.rankedApartments.splice(insertIndex, 0, winner);
+      console.log(`📊 Inserted ${winner.id} at position ${insertIndex + 1}`);
+    } else {
+      console.log(`📊 Winner ${winner.id} already ranked, skipping insertion`);
+    }
+  }
+  
+  session.rankingSystem.rankingProgress++;
+  
+  // Log the matchup (for ranking system, we track in comparisonHistory instead)
+  // No need to push to matchupLog since we removed that property
+  
+  // Check if we have more apartments to rank
+  if (session.rankingSystem.unrankedApartments.length > 0) {
+    const nextApartment = session.rankingSystem.unrankedApartments.shift();
+    
+    // Use binary search to find the best comparison apartment
+    const comparisonIndex = Math.floor(session.rankingSystem.rankedApartments.length / 2);
+    const comparisonApartment = session.rankingSystem.rankedApartments[comparisonIndex];
+    
+    const nextMatchupId = `ranking-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    session.currentMatchup = {
+      id: nextMatchupId,
+      leftApartment: nextApartment,
+      rightApartment: comparisonApartment,
+      votes: [],
+      status: 'active',
+      createdAt: new Date(),
+      isRankingComparison: true
+    };
+    
+    console.log(`🏁 Next ranking comparison: ${nextApartment.id} vs ${comparisonApartment.id} (position ${comparisonIndex + 1})`);
+  } else {
+    // Ranking complete - create comprehensive ranking results
+    console.log('✅ Ranking complete! Creating final ranking with vote counts...');
+    
+    // Create final ranking with vote counts
+    // First, deduplicate the ranked apartments to prevent duplicate keys
+    const uniqueRankedApartments = [];
+    const seenIds = new Set();
+    
+    for (const apartment of session.rankingSystem.rankedApartments) {
+      if (!seenIds.has(apartment.id)) {
+        uniqueRankedApartments.push(apartment);
+        seenIds.add(apartment.id);
+      }
+    }
+    
+    const finalRanking = uniqueRankedApartments.map((apartment, index) => ({
+      rank: index + 1,
+      apartment: apartment,
+      totalVotes: session.rankingSystem.apartmentVoteCounts[apartment.id] || 0,
+      winPercentage: session.rankingSystem.comparisonHistory
+        .filter(comp => comp.winner.id === apartment.id || comp.loser.id === apartment.id)
+        .length > 0 ? 
+        (session.rankingSystem.comparisonHistory
+          .filter(comp => comp.winner.id === apartment.id).length / 
+         session.rankingSystem.comparisonHistory
+          .filter(comp => comp.winner.id === apartment.id || comp.loser.id === apartment.id).length) * 100 : 0
+    }));
+    
+    console.log('📊 Final Ranking Results:');
+    finalRanking.forEach(item => {
+      console.log(`  ${item.rank}. ${item.apartment.name} - ${item.totalVotes} votes (${item.winPercentage.toFixed(1)}% win rate)`);
+    });
+    
+    session.rankingSystem.isRanking = false;
+    session.currentMatchup = null;
+    session.championApartment = session.rankingSystem.rankedApartments[0];
+    
+    // Store the final ranking results
+    session.rankingSystem.finalRanking = finalRanking;
+    
+    console.log(`🏆 Champion: ${session.championApartment.name} with ${finalRanking[0].totalVotes} votes`);
+  }
+};
+
 // Function to get apartments for a session (fallback for sample data)
-const getSessionApartments = (allApartments, numberOfRounds = 10) => {
-  // Calculate how many apartments we need based on the number of rounds
-  // N rounds = N apartments total (not N+1)
-  const apartmentsNeeded = numberOfRounds;
+const getSessionApartments = (allApartments, numberOfApartments = 10) => {
+  // Calculate how many apartments we need
+  const apartmentsNeeded = numberOfApartments;
   
   if (allApartments.length <= apartmentsNeeded) {
-    console.log(`📊 Using all ${allApartments.length} apartments for ${numberOfRounds} rounds`);
+    console.log(`📊 Using all ${allApartments.length} apartments for ranking`);
     return [...allApartments];
   }
   
@@ -528,7 +741,7 @@ const getSessionApartments = (allApartments, numberOfRounds = 10) => {
   const shuffled = [...allApartments].sort(() => Math.random() - 0.5);
   const selectedApartments = shuffled.slice(0, apartmentsNeeded);
   
-  console.log(`📊 Selected ${selectedApartments.length} apartments for ${numberOfRounds} rounds`);
+  console.log(`📊 Selected ${selectedApartments.length} apartments for ranking`);
   return selectedApartments;
 };
 
@@ -538,7 +751,8 @@ function initializeSocketServer(io) {
   const socketToUser = new Map();
   
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id);
+    console.log('🔌 Client connected:', socket.id);
+    console.log('🔌 Total connections:', io.engine.clientsCount);
 
     // Generate a unique session code
     const generateSessionCode = () => {
@@ -552,7 +766,8 @@ function initializeSocketServer(io) {
 
     // Create a new session
     socket.on('create-session', ({ nickname }) => {
-      console.log('Server: Creating session for', nickname);
+      console.log('🚀 Server: Creating session for', nickname);
+      console.log('🚀 Socket ID:', socket.id);
       const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       const code = generateSessionCode();
       const userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -581,8 +796,8 @@ function initializeSocketServer(io) {
           notifyOnNewRatings: true,
         notifyOnVetos: true,
         
-        // Tournament settings
-        numberOfRounds: 10 // Default number of rounds
+        // Ranking settings
+        numberOfApartments: 10 // Number of apartments to rank (replaces numberOfRounds)
       };
 
       const session = {
@@ -599,10 +814,17 @@ function initializeSocketServer(io) {
         }],
         currentMatchup: null, // No matchup until host starts
         availableApartments: [], // Will be populated asynchronously
-        eliminatedApartments: [],
-        matchupLog: [],
         championApartment: null,
-        currentRound: 0, // Track current round number
+        // Binary search ranking system
+        rankingSystem: {
+          rankedApartments: [], // Array of apartments in ranked order
+          unrankedApartments: [], // Apartments not yet ranked
+          currentComparison: null, // Current apartment being ranked
+          isRanking: false, // Whether we're in ranking mode
+          rankingProgress: 0, // How many apartments have been ranked
+          apartmentVoteCounts: {}, // Track total votes for each apartment
+          comparisonHistory: [], // Track all comparisons made
+        },
         settings: defaultSettings,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -618,8 +840,8 @@ function initializeSocketServer(io) {
       console.log('Server: Session created with code', code);
       
       // Fetch apartments from database asynchronously
-      console.log(`🔍 Starting apartment fetch for session ${sessionId} with ${defaultSettings.numberOfRounds} rounds`);
-      fetchApartmentsFromDatabase(defaultSettings.numberOfRounds).then(apartments => {
+      console.log(`🔍 Starting apartment fetch for session ${sessionId} with ${defaultSettings.numberOfApartments} apartments`);
+      fetchApartmentsFromDatabase(defaultSettings.numberOfApartments).then(apartments => {
         // Update the session with fetched apartments
         const updatedSession = serverSessionStorage.getSession(sessionId);
         if (updatedSession) {
@@ -638,7 +860,7 @@ function initializeSocketServer(io) {
         // Fallback to sample apartments
         const updatedSession = serverSessionStorage.getSession(sessionId);
         if (updatedSession) {
-          const fallbackApartments = getSessionApartments(sampleApartments, defaultSettings.numberOfRounds);
+          const fallbackApartments = getSessionApartments(sampleApartments, defaultSettings.numberOfApartments);
           updatedSession.availableApartments = fallbackApartments;
           serverSessionStorage.updateSession(updatedSession);
           console.log(`📊 Session ${sessionId} updated with ${fallbackApartments.length} sample apartments`);
@@ -668,9 +890,10 @@ function initializeSocketServer(io) {
 
     // Join an existing session
     socket.on('join-session', ({ code, nickname }) => {
-      console.log('Server: Joining session with code', code);
-      console.log('Server: Join session - socket.id:', socket.id);
-      console.log('Server: All sessions:', serverSessionStorage.getAllSessions().map(s => ({ code: s.code, id: s.id, roommates: s.roommates.length })));
+      console.log('🔗 Server: Joining session with code', code);
+      console.log('🔗 Socket ID:', socket.id);
+      console.log('🔗 Nickname:', nickname);
+      console.log('🔗 Available sessions:', serverSessionStorage.getAllSessions().map(s => ({ code: s.code, id: s.id, roommates: s.roommates.length })));
       
       const session = serverSessionStorage.getSessionByCode(code);
       
@@ -906,113 +1129,30 @@ function initializeSocketServer(io) {
             currentSession.currentMatchup.status = status;
             currentSession.currentMatchup.completedAt = new Date();
             
-            // Save comparison decision to Supabase if there's a winner
-            if (winnerId && status === 'completed') {
-              const losingApartmentId = winnerId === currentSession.currentMatchup.leftApartment.id 
-                ? currentSession.currentMatchup.rightApartment.id 
-                : currentSession.currentMatchup.leftApartment.id;
-              
-              saveComparisonToSupabase(currentSession.code, winnerId, losingApartmentId).then(success => {
-                if (success) {
-                  console.log('✅ Comparison decision saved to Supabase');
-                } else {
-                  console.warn('⚠️ Failed to save comparison to Supabase, but tournament continues');
-                }
-              });
-            }
-            
-            // Log the matchup
-            const matchupLog = {
-              matchupId: currentSession.currentMatchup.id,
-              leftApartmentId: currentSession.currentMatchup.leftApartment.id,
-              rightApartmentId: currentSession.currentMatchup.rightApartment.id,
-              winnerId,
-              votes: [...currentSession.currentMatchup.votes],
-              createdAt: currentSession.currentMatchup.createdAt
-            };
-            currentSession.matchupLog.push(matchupLog);
-            
-            // Update session with results
-            if (winnerId) {
-              const winner = winnerId === currentSession.currentMatchup.leftApartment.id 
-                ? currentSession.currentMatchup.leftApartment 
-                : currentSession.currentMatchup.rightApartment;
-              
-              // Move loser to eliminated
-              const loser = winnerId === currentSession.currentMatchup.leftApartment.id 
-                ? currentSession.currentMatchup.rightApartment 
-                : currentSession.currentMatchup.leftApartment;
-              currentSession.eliminatedApartments.push(loser);
-              
-              // Update champion to the current winner
-              currentSession.championApartment = winner;
-              
-              // Check if we've reached the maximum number of rounds
-              const maxRounds = currentSession.settings?.numberOfRounds || 10;
-              
-              console.log(`🔍 Tournament check: Round ${currentSession.currentRound}/${maxRounds}, Apartments left: ${currentSession.availableApartments.length}`);
-              console.log(`🔍 Remaining apartments: ${currentSession.availableApartments.map(apt => apt.id).join(', ')}`);
-              
-              if (currentSession.currentRound < maxRounds) {
-                // Create next matchup if we haven't reached max rounds
-              if (currentSession.availableApartments.length > 0) {
-                const nextApartment = currentSession.availableApartments.shift();
-                const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-                  
-                  // Increment round counter when new apartment is introduced
-                  currentSession.currentRound++;
-                  
-                  console.log(`🏁 Next matchup: ${currentSession.championApartment.id} vs ${nextApartment.id}`);
-                  console.log(`🏁 Remaining apartments after shift: ${currentSession.availableApartments.length}`);
-                
-                currentSession.currentMatchup = {
-                  id: nextMatchupId,
-                  leftApartment: currentSession.championApartment,
-                  rightApartment: nextApartment,
-                  votes: [],
-                  status: 'active',
-                  createdAt: new Date()
-                };
-                  
-                  console.log(`Server: Round ${currentSession.currentRound}/${maxRounds} - Next matchup created`);
-            } else {
-                  // No more apartments but haven't reached max rounds - tournament complete
-                  console.log(`❌ Tournament completed - no more apartments after ${currentSession.currentRound} rounds (max: ${maxRounds})`);
-                  console.log(`❌ This means we ran out of apartments too early!`);
-                  currentSession.championApartment = winner;
-                  currentSession.currentMatchup = null;
-                }
-              } else {
-                // Tournament complete - max rounds reached
-                console.log(`✅ Tournament completed after ${currentSession.currentRound} rounds (max: ${maxRounds}), setting champion:`, winner);
-              currentSession.championApartment = winner;
-              currentSession.currentMatchup = null;
-            }
-            } else {
-              // Tie - no winner determined, keep current matchup for tiebreak
-              currentSession.currentMatchup.status = 'tie';
+            // Process ranking vote (binary search only)
+            if (winnerId && currentSession.rankingSystem && currentSession.rankingSystem.isRanking) {
+                console.log('🔍 Processing ranking vote...');
+                processRankingVote(currentSession, winnerId);
             }
             
             serverSessionStorage.updateSession(currentSession);
             
-            // Broadcast matchup completion (only if there's still a matchup)
-            if (currentSession.currentMatchup) {
-              io.to(session.id).emit('matchup-completed', { matchup: currentSession.currentMatchup });
-            } else {
-              // Tournament completed
-              console.log('Server: Broadcasting tournament-completed with champion:', currentSession.championApartment);
+            // Broadcast session update
+            io.to(session.id).emit('session-updated', { session: currentSession });
+            
+            // If ranking is complete, broadcast ranking completion with full results
+            if (!currentSession.rankingSystem.isRanking) {
+              console.log('Server: Broadcasting ranking-completed with full ranking results');
               io.to(session.id).emit('tournament-completed', { 
-                champion: currentSession.championApartment 
+                champion: currentSession.championApartment,
+                ranking: currentSession.rankingSystem.rankedApartments,
+                finalRanking: currentSession.rankingSystem.finalRanking,
+                voteCounts: currentSession.rankingSystem.apartmentVoteCounts,
+                comparisonHistory: currentSession.rankingSystem.comparisonHistory
               });
             }
-            
-            // CRITICAL: Broadcast session-updated after tournament completion
-            const finalSession = serverSessionStorage.getSession(session.id);
-            if (finalSession) {
-              io.to(session.id).emit('session-updated', { session: finalSession });
-            }
           }
-        }, 1000); // Countdown every 1 second
+        }, 1000);
       }
       
       // Clear the processing guard
@@ -1027,17 +1167,20 @@ function initializeSocketServer(io) {
 
     // Force end current round (host only)
     socket.on('force-end-round', () => {
+      console.log('🛑 Server: Received force-end-round from socket', socket.id);
       const session = Array.from(serverSessionStorage.getAllSessions()).find(s => 
         socket.rooms.has(s.id)
       );
       
       if (!session || !session.currentMatchup) {
+        console.warn('🛑 Server: force-end-round failed: no active session/matchup. session?', !!session);
         socket.emit('error', { message: 'Not in an active session' });
         return;
       }
 
       // Get the user ID from the socket mapping
       const userId = socketToUser.get(socket.id);
+      console.log('🛑 Server: force-end-round userId from mapping:', userId, 'hostId:', session.hostId);
       if (!userId) {
         socket.emit('error', { message: 'User not found' });
         return;
@@ -1045,6 +1188,7 @@ function initializeSocketServer(io) {
       
       const currentUser = session.roommates.find(r => r.id === userId);
       if (!currentUser || currentUser.id !== session.hostId) {
+        console.warn('🛑 Server: force-end-round rejected: not host');
         socket.emit('error', { message: 'Only the host can force end rounds' });
         return;
       }
@@ -1138,39 +1282,22 @@ function initializeSocketServer(io) {
         return;
       }
 
-      // Create first matchup if none exists
+      // Initialize binary search ranking system
       if (!session.currentMatchup && session.availableApartments.length >= 2) {
-        // Initialize round counter to 1 for the first matchup
-        // Round 1 = first matchup (2 apartments)
-        session.currentRound = 1;
+        console.log(`🔍 Starting binary search ranking with ${session.availableApartments.length} apartments`);
+        console.log(`🔍 Available apartments: ${session.availableApartments.map(apt => apt.id).join(', ')}`);
         
-        console.log(`🏁 Tournament starting with ${session.availableApartments.length} apartments`);
-        console.log(`🏁 Available apartments: ${session.availableApartments.map(apt => apt.id).join(', ')}`);
+        // Initialize the ranking system
+        initializeRankingSystem(session);
         
-        const matchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const firstApartment = session.availableApartments.shift();
-        const secondApartment = session.availableApartments.shift();
-        
-        console.log(`🏁 First matchup: ${firstApartment.id} vs ${secondApartment.id}`);
-        console.log(`🏁 Remaining apartments: ${session.availableApartments.length}`);
-        
-        session.currentMatchup = {
-          id: matchupId,
-          leftApartment: firstApartment,
-          rightApartment: secondApartment,
-          votes: [],
-          status: 'active',
-          createdAt: new Date()
-        };
-        
-        console.log(`Server: Tournament started - Round 1/${session.settings.numberOfRounds || 10}`);
+        console.log(`Server: Binary search ranking started with ${session.availableApartments.length} apartments`);
         
         // Save room data to room table when voting officially starts
         console.log('🚀 Starting to save room data to room table...');
         console.log('📊 Session data:', {
           code: session.code,
           roommates: session.roommates.map(r => r.nickname),
-          rounds: session.settings?.numberOfRounds || 10
+          apartments: session.settings?.numberOfApartments || 10
         });
         
         saveRoomToRoom2(session).then(success => {
@@ -1214,60 +1341,26 @@ function initializeSocketServer(io) {
         return;
       }
 
-      // Set winner from host decision
-      session.currentMatchup.winner = winnerId;
-      session.currentMatchup.status = 'completed';
-      session.currentMatchup.completedAt = new Date();
-      
-      // Save comparison decision to Supabase for host tiebreak
-      const losingApartmentId = winnerId === session.currentMatchup.leftApartment.id 
-        ? session.currentMatchup.rightApartment.id 
-        : session.currentMatchup.leftApartment.id;
-      
-      saveComparisonToSupabase(session.code, winnerId, losingApartmentId).then(success => {
-        if (success) {
-          console.log('✅ Host tiebreak comparison saved to Supabase');
-        } else {
-          console.warn('⚠️ Failed to save host tiebreak comparison to Supabase, but tournament continues');
-        }
-      });
-      
-      // Update champion to the current winner
-      session.championApartment = winnerId === session.currentMatchup.leftApartment.id 
-        ? session.currentMatchup.leftApartment 
-        : session.currentMatchup.rightApartment;
-      
-      // Move loser to eliminated
-      const loser = winnerId === session.currentMatchup.leftApartment.id 
-        ? session.currentMatchup.rightApartment 
-        : session.currentMatchup.leftApartment;
-      session.eliminatedApartments.push(loser);
-      
-      // Create next matchup if apartments remain
-      if (session.availableApartments.length > 0) {
-        const nextApartment = session.availableApartments.shift();
-        const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        
-        // Increment round counter when new apartment is introduced
-        session.currentRound++;
-        
-        session.currentMatchup = {
-          id: nextMatchupId,
-          leftApartment: session.championApartment,
-          rightApartment: nextApartment,
-          votes: [],
-          status: 'active',
-          createdAt: new Date()
-        };
-      } else {
-        // Tournament complete
-        session.currentMatchup = null;
-      }
+      // Process ranking tiebreak (binary search only)
+      console.log('🔍 Processing ranking tiebreak...');
+      processRankingVote(session, winnerId);
       
       serverSessionStorage.updateSession(session);
       
       // Broadcast session update
       io.to(session.id).emit('session-updated', { session });
+      
+      // If ranking is complete, broadcast ranking completion with full results
+      if (!session.rankingSystem.isRanking) {
+        console.log('Server: Broadcasting ranking-completed with full ranking results');
+        io.to(session.id).emit('tournament-completed', { 
+          champion: session.championApartment,
+          ranking: session.rankingSystem.rankedApartments,
+          finalRanking: session.rankingSystem.finalRanking,
+          voteCounts: session.rankingSystem.apartmentVoteCounts,
+          comparisonHistory: session.rankingSystem.comparisonHistory
+        });
+      }
     });
 
     // Handle settings update
@@ -1291,6 +1384,28 @@ function initializeSocketServer(io) {
       // Update settings
       session.settings = { ...session.settings, ...settings };
       session.updatedAt = new Date();
+      
+      // If numberOfApartments changed and session hasn't started yet, refetch apartments
+      if (settings.numberOfApartments !== undefined && 
+          settings.numberOfApartments !== session.availableApartments.length &&
+          !session.rankingSystem.isRanking) {
+        console.log(`🔄 Refetching apartments due to numberOfApartments change: ${session.availableApartments.length} -> ${settings.numberOfApartments}`);
+        
+        // Refetch apartments with new number
+        fetchApartmentsFromDatabase(settings.numberOfApartments).then(apartments => {
+          const updatedSession = serverSessionStorage.getSession(session.id);
+          if (updatedSession) {
+            updatedSession.availableApartments = apartments;
+            serverSessionStorage.updateSession(updatedSession);
+            console.log(`📊 Session ${session.id} updated with ${apartments.length} apartments`);
+            
+            // Broadcast the updated session
+            io.to(session.id).emit('session-updated', { session: updatedSession });
+          }
+        }).catch(error => {
+          console.error('❌ Failed to refetch apartments:', error);
+        });
+      }
       
       serverSessionStorage.updateSession(session);
       
@@ -1420,10 +1535,27 @@ function initializeSocketServer(io) {
     socket.on('leave-session', ({ sessionId }) => {
       console.log('Client leaving session:', sessionId);
       
-      const userId = socketToUser.get(socket.id);
+      let userId = socketToUser.get(socket.id);
       if (!userId) {
-        console.log('User not found in session mapping');
-        return;
+        console.log('⚠️ User not found in session mapping, attempting recovery...');
+        
+        // Try to find user by session and socket rooms
+        const session = serverSessionStorage.getSession(sessionId);
+        if (session) {
+          // Find online users in this session
+          const onlineUsers = session.roommates.filter(r => r.isOnline);
+          if (onlineUsers.length === 1) {
+            userId = onlineUsers[0].id;
+            socketToUser.set(socket.id, userId);
+            console.log('✅ Recovered user mapping:', userId);
+          } else {
+            console.log('❌ Cannot recover user mapping - multiple or no online users');
+            return;
+          }
+        } else {
+          console.log('❌ Session not found for recovery');
+          return;
+        }
       }
 
       const session = serverSessionStorage.getSession(sessionId);
@@ -1462,7 +1594,8 @@ function initializeSocketServer(io) {
 
     // Handle disconnection
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      console.log('🔌 Client disconnected:', socket.id);
+      console.log('🔌 Remaining connections:', io.engine.clientsCount - 1);
       
       // Get the user ID from the socket mapping
       const userId = socketToUser.get(socket.id);
@@ -1491,4 +1624,3 @@ module.exports = {
   initializeSocketServer,
   serverSessionStorage
 };
-

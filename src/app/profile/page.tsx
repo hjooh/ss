@@ -477,6 +477,7 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">{user.nickname || 'Your Name'}</h2>
+                  <p className="text-sm text-gray-500">@{user.username}</p>
                 </div>
               </div>
 

@@ -13,6 +13,7 @@ interface ApartmentComparisonProps {
   onHostTiebreak?: (winnerId: string) => void;
   isHost?: boolean;
   roundNumber?: number;
+  isAnonymousMode?: boolean;
 }
 
 export const ApartmentComparison = ({
@@ -23,7 +24,8 @@ export const ApartmentComparison = ({
   onForceEndRound,
   onHostTiebreak,
   isHost = false,
-  roundNumber = 1
+  roundNumber = 1,
+  isAnonymousMode = false
 }: ApartmentComparisonProps) => {
   const [currentImageIndex, setCurrentImageIndex] = useState({ left: 0, right: 0 });
   const [animatedVotes, setAnimatedVotes] = useState(new Set<string>());
@@ -77,6 +79,10 @@ export const ApartmentComparison = ({
   // Count online users
   const onlineUsers = roommates.filter(r => r.isOnline);
   const allVoted = votes.length === onlineUsers.length;
+
+  // Determine non-voters for floating avatars overlay (one avatar per person)
+  const voterIds = new Set(votes.map(v => v.roommateId));
+  const nonVoters = onlineUsers.filter(u => !voterIds.has(u.id));
   
   const handleVote = (apartmentId: string) => {
     console.log('ApartmentComparison: handleVote called with apartmentId:', apartmentId);
@@ -132,6 +138,46 @@ export const ApartmentComparison = ({
     return { top, left, rotation };
   };
 
+  // Seeded pseudo-random generator (stable per user id)
+  const seededRandom = (seedStr: string, salt: string) => {
+    let seed = 0;
+    const mixed = `${seedStr}:${salt}`;
+    for (let i = 0; i < mixed.length; i++) {
+      seed = (seed * 31 + mixed.charCodeAt(i)) >>> 0;
+    }
+    // Xorshift32
+    seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+    // Normalize to [0,1)
+    return (seed >>> 0) / 0xffffffff;
+  };
+
+  // Position floating non-voter avatars near, but never inside, the cards
+  // Strategy:
+  // - Keep horizontal clusters clearly outside the card regions
+  //   (left cluster: ~6%-18%, right cluster: ~82%-94%)
+  // - Keep vertical bands above or below the cards, avoiding the card band
+  //   (above: ~10%-22%, below: ~78%-90%)
+  const getFloatingPositionForUser = (userId: string, index: number) => {
+    const sideRand = seededRandom(userId, 'side');
+    const verticalRand = seededRandom(userId, 'vertical');
+    const isLeftCluster = sideRand < 0.5;
+    const placeAbove = verticalRand < 0.5;
+
+    // Bring closer but still outside cards
+    // Horizontal: left band ~10–18%, right band ~82–90%
+    const baseLeftMin = isLeftCluster ? 10 : 82;
+    const baseLeftMax = isLeftCluster ? 18 : 90;
+    // Vertical: just above (~16–26%) or just below (~74–84%) the card band
+    const baseTopMin = placeAbove ? 16 : 74;
+    const baseTopMax = placeAbove ? 26 : 84;
+
+    const jitterLeft = (seededRandom(userId, `left-${index}`) - 0.5) * 3; // ±1.5%
+    const jitterTop = (seededRandom(userId, `top-${index}`) - 0.5) * 3;  // ±1.5%
+    const left = Math.min(baseLeftMax, Math.max(baseLeftMin, baseLeftMin + (baseLeftMax - baseLeftMin) * seededRandom(userId, 'lspan') + jitterLeft));
+    const top = Math.min(baseTopMax, Math.max(baseTopMin, baseTopMin + (baseTopMax - baseTopMin) * seededRandom(userId, 'tspan') + jitterTop));
+    return { top: `${top}%`, left: `${left}%` };
+  };
+
   const ApartmentCard = ({ 
     apartment, 
     votes, 
@@ -185,7 +231,7 @@ export const ApartmentComparison = ({
             className="w-full h-full object-cover"
           />
           
-          {/* Voter Profile Pictures Overlay - Independent of image changes */}
+          {/* Voter Profile Pictures Overlay - appears on card only when they vote */}
           {voters.map((voter) => {
             const position = getVoterPosition(voter.id);
             const isCurrentUser = voter.id === currentUser?.id;
@@ -223,19 +269,27 @@ export const ApartmentComparison = ({
                     e.currentTarget.style.transform = `rotate(${position.rotation}deg) scale(1)`;
                   }}
                 >
-                  <img
-                    src={voter.avatar || generateRoommateAvatar(voter.nickname, 60)}
-                    alt={voter.nickname}
-                    className={`w-12 h-12 rounded-full object-cover ${
-                      isCurrentUser ? '' : 'shadow-lg'
-                    }`}
-                  />
+                  {isAnonymousMode ? (
+                    <div className="w-12 h-12 rounded-full bg-gray-300 flex items-center justify-center">
+                      <span className="text-gray-600 text-lg font-medium">?</span>
+                    </div>
+                  ) : (
+                    <img
+                      src={voter.avatar || generateRoommateAvatar(voter.nickname, 60)}
+                      alt={voter.nickname}
+                      className={`w-12 h-12 rounded-full object-cover ${
+                        isCurrentUser ? '' : 'shadow-lg'
+                      }`}
+                    />
+                  )}
                   
-                  {/* Tooltip */}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
-                    {voter.nickname}
-                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
-                  </div>
+                  {/* Tooltip - only show in non-anonymous mode */}
+                  {!isAnonymousMode && (
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-20">
+                      {voter.nickname}
+                      <div className="absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900"></div>
+                    </div>
+                  )}
                   {isCurrentUser && (
                     <div className="absolute -top-1 -right-1 w-5 h-5 bg-green-500 rounded-full border-2 border-white flex items-center justify-center animate-in zoom-in-50 duration-300 ease-out">
                       <span className="text-white text-xs font-bold">✓</span>
@@ -245,6 +299,7 @@ export const ApartmentComparison = ({
               </div>
             );
           })}
+
           
           {apartment.photos.length > 1 && (
             <>
@@ -376,6 +431,40 @@ export const ApartmentComparison = ({
 
   return (
     <>
+      {/* Global floating avatars for non-voters - clustered near cards */}
+      {status === 'active' && nonVoters.length > 0 && (
+        <div className="pointer-events-none fixed inset-0 z-30">
+          {nonVoters.map((user, idx) => {
+            const pos = getFloatingPositionForUser(user.id, idx);
+            const animDuration = 6 + (idx % 3);
+            const animDelay = (idx * 0.2).toFixed(1) + 's';
+            return (
+              <div
+                key={`screen-float-${user.id}`}
+                className="absolute"
+                style={{
+                  top: pos.top,
+                  left: pos.left,
+                  animation: `float ${animDuration}s ease-in-out ${animDelay} infinite`,
+                }}
+              >
+                {isAnonymousMode ? (
+                  <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center shadow-xl ring-2 ring-white">
+                    <span className="text-gray-600 text-sm font-medium">?</span>
+                  </div>
+                ) : (
+                  <img
+                    src={user.avatar || generateRoommateAvatar(user.nickname, 48)}
+                    alt={user.nickname}
+                    className="w-10 h-10 rounded-full shadow-xl ring-2 ring-white"
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Non-blocking countdown overlay */}
       {isCountingDown && (
         <div className="fixed bottom-4 left-4 z-50">

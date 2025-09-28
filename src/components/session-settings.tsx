@@ -64,21 +64,24 @@ export const SessionSettings = ({ settings, onUpdateSettings, isHost, onClose }:
       <CardContent className="space-y-6">
         <div className="space-y-4">
           <div className="space-y-1">
-            <Label htmlFor="number-of-rounds">Number of Rounds</Label>
+            <Label htmlFor="number-of-apartments">Number of Apartments to Rank</Label>
             <div className="flex items-center gap-4">
               <Slider
-                id="number-of-rounds"
-                min={1}
+                id="number-of-apartments"
+                min={3}
                 max={20}
                 step={1}
-                value={[localSettings.numberOfRounds || 10]}
-                onValueChange={([value]) => handleSettingChange('numberOfRounds', value)}
+                value={[localSettings.numberOfApartments || 10]}
+                onValueChange={([value]) => handleSettingChange('numberOfApartments', value)}
                 className="flex-1"
               />
               <Badge variant="outline" className="min-w-[4rem] justify-center">
-                {localSettings.numberOfRounds || 10}
+                {localSettings.numberOfApartments || 10}
               </Badge>
             </div>
+            <p className="text-xs text-gray-500">
+              Choose how many apartments to include in the ranking process
+            </p>
           </div>
         </div>
 

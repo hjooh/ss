@@ -6,9 +6,10 @@ interface RoommateListProps {
   roommates: Roommate[];
   currentUser: Roommate | null;
   onLeaveSession?: () => void;
+  isAnonymousMode?: boolean;
 }
 
-export const RoommateList = ({ roommates, currentUser, onLeaveSession }: RoommateListProps) => {
+export const RoommateList = ({ roommates, currentUser, onLeaveSession, isAnonymousMode = false }: RoommateListProps) => {
   // Filter to only show online roommates
   const onlineRoommates = roommates.filter(roommate => roommate.isOnline);
   
@@ -24,20 +25,38 @@ export const RoommateList = ({ roommates, currentUser, onLeaveSession }: Roommat
             }`}
           >
             <div className="relative">
-              <img
-                src={roommate.avatar}
-                alt={roommate.nickname}
-                className="w-8 h-8 rounded-full"
-              />
+              {isAnonymousMode ? (
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+                  <span className="text-gray-600 text-xs font-medium">?</span>
+                </div>
+              ) : (
+                <img
+                  src={roommate.avatar}
+                  alt={roommate.nickname}
+                  className="w-8 h-8 rounded-full"
+                />
+              )}
               <div
                 className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full border-2 border-white bg-green-500"
               />
             </div>
             <div className="flex-1">
               <p className="text-sm font-medium text-gray-900">
-                {roommate.nickname}
-                {roommate.id === currentUser?.id && (
-                  <span className="ml-2 text-xs text-black font-normal">(You)</span>
+                {isAnonymousMode ? (
+                  roommate.id === currentUser?.id ? (
+                    <>
+                      Anonymous (You)
+                    </>
+                  ) : (
+                    'Anonymous'
+                  )
+                ) : (
+                  <>
+                    {roommate.nickname}
+                    {roommate.id === currentUser?.id && (
+                      <span className="ml-2 text-xs text-black font-normal">(You)</span>
+                    )}
+                  </>
                 )}
               </p>
             </div>

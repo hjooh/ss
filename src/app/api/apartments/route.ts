@@ -179,7 +179,7 @@ export async function GET() {
 
     // Map Supabase complex data to our Apartment interface
     const apartments = data.map((complex: any) => ({
-      id: generateDeterministicId(complex),
+      id: complex['complex-id'] || complex.public_id || generateDeterministicId(complex),
       name: complex.name,
       address: complex.address,
       rent: parsePriceRange(complex['price range']),

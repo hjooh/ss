@@ -272,7 +272,12 @@ export const useSocket = () => {
       console.error('Socket not connected');
       return;
     }
-    
+    const sessionCode = sessionState.session?.code;
+    console.log('Client: Emitting force-end-round', {
+      socketId: socketRef.current.id,
+      hasSession: !!sessionState.session,
+      sessionCode
+    });
     socketRef.current.emit('force-end-round');
   };
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/use-socket';
 import { RoommateList } from './roommate-list';
 import { ApartmentComparison } from './apartment-comparison';
@@ -8,6 +9,7 @@ import { TopContenders } from './top-contenders';
 import { SessionSettings } from './session-settings';
 import { Settings } from 'lucide-react';
 import { generateRoomBackground, generateBackgroundDataURL } from '@/lib/background-generator';
+import { HuntSession as HuntSessionType } from '@/types';
 import toast from 'react-hot-toast';
 
 interface HuntSessionProps {
@@ -16,6 +18,7 @@ interface HuntSessionProps {
 }
 
 export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) => {
+  const router = useRouter();
   // Panel state management (roommates now always visible)
   const [activePanel, setActivePanel] = useState<'contenders' | 'settings' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -36,6 +39,8 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
       setBackgroundImage(dataURL);
     }
   }, [session?.code]);
+
+  // Note: Midpoint insights removed - binary search ranking doesn't use rounds
 
 
   if (!session || !currentUser) {
@@ -58,6 +63,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
   };
 
   const handleForceEndRound = () => {
+    console.log('[UI] Host clicked Force End Round');
     forceEndRound();
   };
 
@@ -146,7 +152,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Content */}
-          <div className="lg:col-span-3">
+          <div className={`lg:col-span-3 ${session.currentMatchup ? 'lg:col-span-4' : ''}`}>
             {session.currentMatchup ? (
               <div className="space-y-6">
                 {/* Apartment Comparison */}
@@ -158,22 +164,82 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                   onForceEndRound={handleForceEndRound}
                   onHostTiebreak={handleHostTiebreak}
                   isHost={currentUser?.id === session.hostId}
-                  roundNumber={session.matchupLog.length + 1}
+                  roundNumber={session.rankingSystem?.rankingProgress || 1}
+                  isAnonymousMode={!session.settings?.showIndividualRatings}
                 />
               </div>
             ) : session.championApartment ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🏆</div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Tournament Complete!</h2>
-                <p className="text-gray-600 mb-6">
-                  The winner is: <strong>{session.championApartment.name}</strong>
-                </p>
-                <div className="bg-white rounded-lg p-6 shadow-sm max-w-md mx-auto text-left">
-                  <img src={session.championApartment.photos[0]} alt={session.championApartment.name} className="w-full h-48 object-cover rounded-lg mb-4" />
-                  <h3 className="text-lg font-semibold">{session.championApartment.name}</h3>
-                  <p className="text-gray-600">{session.championApartment.address}</p>
-                  <p className="text-2xl font-bold text-green-600 mt-2">{session.championApartment.rent}/month</p>
+              <div className="py-12">
+                <div className="text-center mb-8">
+                  <div className="text-6xl mb-4">🏆</div>
+                  <h2 className="text-2xl font-bold text-gray-900 mb-2">Ranking Complete!</h2>
+                  <p className="text-gray-600 mb-6">
+                    Here's how your group ranked all the apartments:
+                  </p>
                 </div>
+                
+                {/* Champion Display */}
+                <div className="bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg p-6 mb-8 max-w-2xl mx-auto">
+                  <div className="flex items-center space-x-4">
+                    <div className="text-4xl">🥇</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-yellow-800">#1 Champion</h3>
+                      <h4 className="text-lg font-semibold text-gray-900">{session.championApartment.name}</h4>
+                      <p className="text-gray-600">{session.championApartment.address}</p>
+                      <p className="text-xl font-bold text-green-600 mt-1">{session.championApartment.rent}/month</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-yellow-600">
+                        {session.rankingSystem?.apartmentVoteCounts?.[session.championApartment.id] || 0}
+                      </div>
+                      <div className="text-sm text-gray-600">votes</div>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Full Ranking List */}
+                {session.rankingSystem?.finalRanking && (
+                  <div className="max-w-4xl mx-auto">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">Complete Ranking</h3>
+                    <div className="space-y-3">
+                      {session.rankingSystem.finalRanking.map((item: any, index: number) => (
+                        <div 
+                          key={`${item.apartment.id}-${index}`}
+                          className={`bg-white rounded-lg p-4 shadow-sm border-l-4 ${
+                            index === 0 ? 'border-yellow-400 bg-yellow-50' :
+                            index === 1 ? 'border-gray-300 bg-gray-50' :
+                            index === 2 ? 'border-amber-600 bg-amber-50' :
+                            'border-gray-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-4">
+                              <div className="text-2xl font-bold text-gray-600 w-8">
+                                {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${item.rank}`}
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-lg font-semibold text-gray-900">{item.apartment.name}</h4>
+                                <p className="text-gray-600 text-sm">{item.apartment.address}</p>
+                                <p className="text-gray-700 font-medium">{item.apartment.rent}/month</p>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xl font-bold text-blue-600">
+                                {item.totalVotes}
+                              </div>
+                              <div className="text-sm text-gray-600">votes</div>
+                              {item.winPercentage > 0 && (
+                                <div className="text-xs text-green-600 mt-1">
+                                  {item.winPercentage.toFixed(0)}% win rate
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-8">
@@ -240,6 +306,29 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                         {isCopyDisabled ? 'Copying...' : session.code}
                       </button>
                     </p>
+                    
+                    {/* Ranking Progress Display */}
+                    {session.rankingSystem && session.rankingSystem.isRanking && (
+                      <div className="mt-4 bg-white/20 backdrop-blur-sm rounded-lg p-4">
+                        <div className="flex items-center space-x-3">
+                          <div className="text-2xl">🔍</div>
+                          <div>
+                            <h3 className="text-lg font-semibold">Binary Search Ranking</h3>
+                            <p className="text-sm text-white/80">
+                              Ranking apartments by preference... {session.rankingSystem.rankingProgress} of {session.availableApartments.length} completed
+                            </p>
+                            <div className="w-full bg-white/20 rounded-full h-2 mt-2">
+                              <div 
+                                className="bg-blue-400 h-2 rounded-full transition-all duration-300" 
+                                style={{ 
+                                  width: `${(session.rankingSystem.rankingProgress / session.availableApartments.length) * 100}%` 
+                                }}
+                              ></div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -278,47 +367,50 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
             )}
           </div>
 
-          {/* Sidebar */}
-          <div className="lg:col-span-1">
-            {/* Sidebar with permanent roommates list */}
-            <div className="sticky top-8 space-y-6">
-              {/* Always visible roommates */}
-              <RoommateList
-                roommates={session.roommates}
-                currentUser={currentUser}
-                onLeaveSession={onLeaveSession}
-              />
-              
-              {/* {activePanel === 'contenders' && (
-                <TopContenders
-                  session={session}
+          {/* Sidebar (hidden during active matchup) */}
+          {!session.currentMatchup && (
+            <div className="lg:col-span-1">
+              {/* Sidebar with permanent roommates list */}
+              <div className="sticky top-8 space-y-6">
+                {/* Always visible roommates */}
+                <RoommateList
+                  roommates={session.roommates}
+                  currentUser={currentUser}
+                  onLeaveSession={onLeaveSession}
+                  isAnonymousMode={!session.settings?.showIndividualRatings}
                 />
-              )} */}
-              
-              {showSettings && (
-                <SessionSettings
-                  settings={session.settings || {
-                    requireUnanimousVoting: false,
-                    allowVetoOverride: true,
-                    minimumRatingToPass: 3,
-                    allowMembersToControlNavigation: true,
-                    autoAdvanceOnConsensus: false,
-                    sessionTimeout: 60,
-                    maxRent: null,
-                    minBedrooms: null,
-                    maxCommute: null,
-                    showIndividualRatings: true,
-                    allowGuestJoining: true,
-                    notifyOnNewRatings: true,
-                    notifyOnVetos: true
-                  }}
-                  onUpdateSettings={updateSettings}
-                  isHost={currentUser?.id === session.hostId}
-                  onClose={() => setShowSettings(false)}
-                />
-              )}
+                
+                {/* {activePanel === 'contenders' && (
+                  <TopContenders
+                    session={session}
+                  />
+                )} */}
+                
+                {showSettings && (
+                  <SessionSettings
+                    settings={session.settings || {
+                      requireUnanimousVoting: false,
+                      allowVetoOverride: true,
+                      minimumRatingToPass: 3,
+                      allowMembersToControlNavigation: true,
+                      autoAdvanceOnConsensus: false,
+                      sessionTimeout: 60,
+                      maxRent: null,
+                      minBedrooms: null,
+                      maxCommute: null,
+                      showIndividualRatings: true,
+                      allowGuestJoining: true,
+                      notifyOnNewRatings: true,
+                      notifyOnVetos: true
+                    }}
+                    onUpdateSettings={updateSettings}
+                    isHost={currentUser?.id === session.hostId}
+                    onClose={() => setShowSettings(false)}
+                  />
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

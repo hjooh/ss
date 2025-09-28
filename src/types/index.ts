@@ -60,6 +60,7 @@ export interface Matchup {
   completedAt?: Date;
   countdownSeconds?: number;
   countdownStartTime?: Date;
+  isRankingComparison?: boolean; // Flag to indicate this is a ranking comparison
 }
 
 export interface MatchupLog {
@@ -91,6 +92,38 @@ export interface LobbySettings {
   
   // Notification preferences
   notifyOnNewRatings: boolean;
+  
+  // Ranking settings
+  numberOfApartments: number;
+}
+
+export interface RankingResult {
+  rank: number;
+  apartment: Apartment;
+  totalVotes: number;
+  winPercentage: number;
+}
+
+export interface ComparisonHistory {
+  leftApartment: Apartment;
+  rightApartment: Apartment;
+  winner: Apartment;
+  loser: Apartment;
+  winnerVotes: number;
+  loserVotes: number;
+  totalVotes: number;
+  timestamp: Date;
+}
+
+export interface RankingSystem {
+  rankedApartments: Apartment[];
+  unrankedApartments: Apartment[];
+  currentComparison: Apartment | null;
+  isRanking: boolean;
+  rankingProgress: number;
+  apartmentVoteCounts: Record<string, number>;
+  comparisonHistory: ComparisonHistory[];
+  finalRanking?: RankingResult[];
 }
 
 export interface HuntSession {
@@ -101,9 +134,8 @@ export interface HuntSession {
   roommates: Roommate[];
   currentMatchup: Matchup | null;
   availableApartments: Apartment[];
-  eliminatedApartments: Apartment[];
-  matchupLog: MatchupLog[];
   championApartment: Apartment | null;
+  rankingSystem: RankingSystem;
   settings: LobbySettings;
   createdAt: Date;
   updatedAt: Date;
