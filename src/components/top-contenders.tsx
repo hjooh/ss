@@ -12,7 +12,7 @@ export const TopContenders = ({ session }: TopContendersProps) => {
     let wins = 0;
     let totalMatches = 0;
     
-    session.matchupLog.forEach(matchup => {
+    (session as any).matchupLog?.forEach((matchup: any) => {
       if (matchup.leftApartmentId === apartmentId || matchup.rightApartmentId === apartmentId) {
         totalMatches++;
         if (matchup.winnerId === apartmentId) {
@@ -34,12 +34,12 @@ export const TopContenders = ({ session }: TopContendersProps) => {
     }
     
     // Add eliminated apartments
-    session.eliminatedApartments.forEach(apt => {
+    (session as any).eliminatedApartments?.forEach((apt: any) => {
       apartments.set(apt.id, apt);
     });
     
     // Add apartments from matchup history
-    session.matchupLog.forEach(matchup => {
+    (session as any).matchupLog?.forEach((matchup: any) => {
       // We'll need to reconstruct apartment data from the matchup log
       // For now, we'll use the champion and eliminated apartments
     });
@@ -125,12 +125,12 @@ export const TopContenders = ({ session }: TopContendersProps) => {
         </div>
       )}
       
-      {session.matchupLog.length > 0 && (
+      {(session as any).matchupLog?.length > 0 && (
         <div className="mt-4 pt-3 border-t">
           <div className="text-xs text-gray-500">
             <div className="flex justify-between">
               <span>Total Matchups:</span>
-              <span>{session.matchupLog.length}</span>
+              <span>{(session as any).matchupLog?.length || 0}</span>
             </div>
             <div className="flex justify-between">
               <span>Apartments Compared:</span>

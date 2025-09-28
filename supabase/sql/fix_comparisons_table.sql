@@ -38,3 +38,4 @@ COMMENT ON COLUMN comparisons.session_id IS 'Session/room code where the compari
 COMMENT ON COLUMN comparisons.winning_apartment_id IS 'ID of the apartment that won the comparison';
 COMMENT ON COLUMN comparisons.losing_apartment_id IS 'ID of the apartment that lost the comparison';
 COMMENT ON COLUMN comparisons.created_at IS 'When the comparison decision was made';
+

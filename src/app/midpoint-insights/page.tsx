@@ -15,8 +15,9 @@ export default function MidpointInsightsPage() {
           name: 'Mock Session',
           currentRound: 5,
           settings: { numberOfRounds: 10 },
-          championApartment: null,
+          championApartment: undefined,
           eliminatedApartments: [],
+          matchupLog: [],
           availableApartments: []
         }}
         onContinue={() => router.replace('/')}

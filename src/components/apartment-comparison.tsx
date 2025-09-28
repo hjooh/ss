@@ -30,21 +30,11 @@ export const ApartmentComparison = ({
   const [currentImageIndex, setCurrentImageIndex] = useState({ left: 0, right: 0 });
   const [animatedVotes, setAnimatedVotes] = useState(new Set<string>());
 
-  if (!matchup) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-6xl mb-4">🏆</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Tournament Complete!</h2>
-        <p className="text-gray-600">All apartments have been compared</p>
-      </div>
-    );
-  }
-
-  const { leftApartment, rightApartment, votes, status, countdownSeconds } = matchup;
-  const isCountingDown = status === 'counting-down';
-  
   // Track which votes have been animated to prevent re-animation on countdown updates
   useEffect(() => {
+    if (!matchup) return;
+    
+    const { votes } = matchup;
     const newVotes = new Set<string>();
     votes.forEach(vote => {
       const voteKey = `${vote.roommateId}-${vote.apartmentId}-${new Date(vote.timestamp).getTime()}`;
@@ -60,8 +50,20 @@ export const ApartmentComparison = ({
         setAnimatedVotes(prev => new Set([...prev, ...unAnimatedVotes]));
       }, 600);
     }
-  }, [votes]); // Only depend on votes, not animatedVotes
-  
+  }, [matchup, animatedVotes]);
+
+  if (!matchup) {
+    return (
+      <div className="text-center py-12">
+        <div className="text-6xl mb-4">🏆</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Tournament Complete!</h2>
+        <p className="text-gray-600">All apartments have been compared</p>
+      </div>
+    );
+  }
+
+  const { leftApartment, rightApartment, votes, status, countdownSeconds } = matchup;
+  const isCountingDown = status === 'counting-down';
   
   // Get votes for each apartment
   const leftVotes = votes.filter(v => v.apartmentId === leftApartment.id);

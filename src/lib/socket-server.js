@@ -1208,16 +1208,18 @@ function initializeSocketServer(io) {
       session.currentMatchup.status = winnerId ? 'completed' : 'tie';
       session.currentMatchup.completedAt = new Date();
       
-      // Log the matchup
-      const matchupLog = {
-        matchupId: session.currentMatchup.id,
-        leftApartmentId: session.currentMatchup.leftApartment.id,
-        rightApartmentId: session.currentMatchup.rightApartment.id,
-        winnerId,
-        votes: [...session.currentMatchup.votes],
-        createdAt: session.currentMatchup.createdAt
-      };
-      session.matchupLog.push(matchupLog);
+      // Log the matchup (only if matchupLog exists)
+      if (session.matchupLog) {
+        const matchupLog = {
+          matchupId: session.currentMatchup.id,
+          leftApartmentId: session.currentMatchup.leftApartment.id,
+          rightApartmentId: session.currentMatchup.rightApartment.id,
+          winnerId,
+          votes: [...session.currentMatchup.votes],
+          createdAt: session.currentMatchup.createdAt
+        };
+        session.matchupLog.push(matchupLog);
+      }
       
       serverSessionStorage.updateSession(session);
       
@@ -1303,6 +1305,76 @@ function initializeSocketServer(io) {
         saveRoomToRoom2(session).then(success => {
           if (success) {
             console.log('✅ Room data saved to room table successfully');
+            
+            // Trigger apartment list generation for the room
+            console.log('🤖 Triggering apartment list generation...');
+            
+            // Emit AI loading state to all users in the room
+            io.to(session.id).emit('ai-generating-apartments', {
+              message: 'AI is curating your personalized apartment list...',
+              roomCode: session.code
+            });
+            
+            // Add a longer delay and retry logic to ensure room data is fully committed
+            const triggerAIGeneration = async (retryCount = 0) => {
+              const maxRetries = 3;
+              const delay = 1000 + (retryCount * 500); // 1s, 1.5s, 2s
+              
+              console.log(`🤖 Attempting AI generation (attempt ${retryCount + 1}/${maxRetries + 1})...`);
+              
+              try {
+                const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/generate-apartment-list`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({ roomCode: session.code })
+                });
+                
+                if (response.ok) {
+                  console.log('✅ Apartment list generation triggered successfully');
+                  
+                  // Emit completion state
+                  io.to(session.id).emit('ai-generation-complete', {
+                    message: 'Your personalized apartment list is ready!',
+                    roomCode: session.code
+                  });
+                  return; // Success, exit retry loop
+                } else {
+                  const errorText = await response.text();
+                  console.error('❌ Failed to trigger apartment list generation:', response.status, response.statusText, errorText);
+                  
+                  if (retryCount < maxRetries) {
+                    console.log(`⏳ Retrying in ${delay}ms...`);
+                    setTimeout(() => triggerAIGeneration(retryCount + 1), delay);
+                    return;
+                  } else {
+                    // Final failure after all retries
+                    io.to(session.id).emit('ai-generation-error', {
+                      message: 'Failed to generate apartment list after multiple attempts. Please try again.',
+                      roomCode: session.code
+                    });
+                  }
+                }
+              } catch (error) {
+                console.error('❌ Error triggering apartment list generation:', error);
+                
+                if (retryCount < maxRetries) {
+                  console.log(`⏳ Retrying in ${delay}ms due to error...`);
+                  setTimeout(() => triggerAIGeneration(retryCount + 1), delay);
+                  return;
+                } else {
+                  // Final failure after all retries
+                  io.to(session.id).emit('ai-generation-error', {
+                    message: 'Failed to generate apartment list after multiple attempts. Please try again.',
+                    roomCode: session.code
+                  });
+                }
+              }
+            };
+            
+            // Start the AI generation process with initial delay
+            setTimeout(() => triggerAIGeneration(), 1000);
           } else {
             console.warn('⚠️ Failed to save room data to room table');
           }
@@ -1550,7 +1622,7 @@ function initializeSocketServer(io) {
             console.log('✅ Recovered user mapping:', userId);
           } else {
             console.log('❌ Cannot recover user mapping - multiple or no online users');
-            return;
+        return;
           }
         } else {
           console.log('❌ Session not found for recovery');
@@ -1590,6 +1662,48 @@ function initializeSocketServer(io) {
       
       // Leave the socket room
       socket.leave(sessionId);
+    });
+
+    // Handle adding apartments to ranking system
+    socket.on('add-apartments-to-ranking', ({ apartments }) => {
+      console.log('🏠 ADD-APARTMENTS-TO-RANKING: Adding apartments to ranking system');
+      console.log('🏠 ADD-APARTMENTS-TO-RANKING: Apartments to add:', apartments.map(apt => apt.name));
+      
+      let session = Array.from(serverSessionStorage.getAllSessions()).find(s => 
+        socket.rooms.has(s.id)
+      );
+      
+      if (!session) {
+        console.error('🚫 ADD-APARTMENTS-TO-RANKING: Session not found');
+        socket.emit('error', { message: 'Session not found' });
+        return;
+      }
+
+      if (!session.rankingSystem) {
+        console.error('🚫 ADD-APARTMENTS-TO-RANKING: Ranking system not initialized');
+        socket.emit('error', { message: 'Ranking system not initialized' });
+        return;
+      }
+
+      // Add new apartments to the unranked list
+      session.rankingSystem.unrankedApartments.push(...apartments);
+      session.availableApartments.push(...apartments);
+      
+      console.log(`✅ ADD-APARTMENTS-TO-RANKING: Added ${apartments.length} apartments to ranking system`);
+      console.log(`📊 Total unranked apartments: ${session.rankingSystem.unrankedApartments.length}`);
+      
+      // Update session
+      serverSessionStorage.updateSession(session);
+      
+      // Broadcast updated session to all clients
+      io.to(session.id).emit('session-updated', { session });
+      
+      // If ranking is not currently active, start it
+      if (!session.rankingSystem.isRanking && session.rankingSystem.unrankedApartments.length > 0) {
+        console.log('🔄 ADD-APARTMENTS-TO-RANKING: Starting ranking process with new apartments');
+        initializeRankingSystem(session);
+        io.to(session.id).emit('session-updated', { session });
+      }
     });
 
     // Handle disconnection

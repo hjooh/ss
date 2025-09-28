@@ -1,15 +1,14 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/use-socket';
 import { RoommateList } from './roommate-list';
 import { ApartmentComparison } from './apartment-comparison';
-import { TopContenders } from './top-contenders';
 import { SessionSettings } from './session-settings';
+import { AILoadingScreen } from './ai-loading-screen';
 import { Settings } from 'lucide-react';
+import { MidpointInsights } from './midpoint-insights';
 import { generateRoomBackground, generateBackgroundDataURL } from '@/lib/background-generator';
-import { HuntSession as HuntSessionType } from '@/types';
 import toast from 'react-hot-toast';
 
 interface HuntSessionProps {
@@ -18,15 +17,12 @@ interface HuntSessionProps {
 }
 
 export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) => {
-  const router = useRouter();
   // Panel state management (roommates now always visible)
-  const [activePanel, setActivePanel] = useState<'contenders' | 'settings' | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession, updateSettings, updateRoomName } = socketHook;
+  const { sessionState, voteApartment, forceEndRound, hostTiebreak, startSession, updateSettings, updateRoomName, isAIGenerating, aiMessage } = socketHook;
   // const [showTooltip, setShowTooltip] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState<string>('');
   const [isCopyDisabled, setIsCopyDisabled] = useState(false);
-  const [isStartingSession, setIsStartingSession] = useState(false);
   const [isEditingRoomName, setIsEditingRoomName] = useState(false);
   const [editedRoomName, setEditedRoomName] = useState('');
   const { session, currentUser } = sessionState;
@@ -40,7 +36,26 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
     }
   }, [session?.code]);
 
-  // Note: Midpoint insights removed - binary search ranking doesn't use rounds
+  // Midpoint insights state for binary search ranking
+  const [showMidpointInsights, setShowMidpointInsights] = useState(false);
+  const hasRedirectedToMidpoint = useRef(false);
+  useEffect(() => {
+    if (!session || !session.rankingSystem || !session.availableApartments) return;
+    if (hasRedirectedToMidpoint.current) return;
+
+    const total = session.availableApartments.length;
+    if (!total || total < 2) return;
+
+    const halfway = Math.floor(total / 2); // one less for odd numbers
+    const progress = session.rankingSystem.rankingProgress || 0;
+
+    if (session.rankingSystem.isRanking && progress >= halfway && halfway > 0) {
+      hasRedirectedToMidpoint.current = true;
+      // Show midpoint insights within the hunt session
+      setShowMidpointInsights(true);
+    }
+  }, [session?.rankingSystem?.rankingProgress, session?.rankingSystem?.isRanking, session?.availableApartments?.length, session]);
+
 
 
   if (!session || !currentUser) {
@@ -71,14 +86,6 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
     hostTiebreak(winnerId);
   };
 
-  // Panel toggle handler (roommates no longer toggleable)
-  const handlePanelToggle = (panelName: 'contenders' | 'settings') => {
-    if (panelName === 'settings') {
-      setShowSettings(!showSettings);
-    } else {
-      setActivePanel(prevPanel => (prevPanel === panelName ? null : panelName));
-    }
-  };
 
   const copySessionCode = async () => {
     // Prevent spam clicking
@@ -153,7 +160,35 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Main Content */}
           <div className={`lg:col-span-3 ${session.currentMatchup ? 'lg:col-span-4' : ''}`}>
-            {session.currentMatchup ? (
+            {showMidpointInsights ? (
+              <MidpointInsights 
+                session={{
+                  id: session.id,
+                  code: session.code,
+                  name: session.name,
+                  currentRound: session.rankingSystem?.rankingProgress || 1,
+                  settings: { numberOfRounds: session.settings?.numberOfApartments || 10 },
+                  championApartment: session.championApartment ? {
+                    ...session.championApartment,
+                    distance: (session.championApartment as { distance?: number }).distance || 1.5
+                  } : undefined,
+                  eliminatedApartments: (session.rankingSystem?.rankedApartments || []).map(apt => ({
+                    ...apt,
+                    distance: (apt as { distance?: number }).distance || 1.5 // Default distance if not present
+                  })),
+                  matchupLog: session.rankingSystem?.comparisonHistory || [],
+                  availableApartments: session.availableApartments.map(apt => ({
+                    ...apt,
+                    distance: (apt as { distance?: number }).distance || 1.5 // Default distance if not present
+                  }))
+                }}
+                onContinue={() => setShowMidpointInsights(false)}
+                onRefineSearch={(priority, direction) => {
+                  console.log('Refining search with priority:', priority, 'direction:', direction);
+                  setShowMidpointInsights(false);
+                }}
+              />
+            ) : session.currentMatchup ? (
               <div className="space-y-6">
                 {/* Apartment Comparison */}
                 <ApartmentComparison
@@ -174,7 +209,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                   <div className="text-6xl mb-4">🏆</div>
                   <h2 className="text-2xl font-bold text-gray-900 mb-2">Ranking Complete!</h2>
                   <p className="text-gray-600 mb-6">
-                    Here's how your group ranked all the apartments:
+                    Here&apos;s how your group ranked all the apartments:
                   </p>
                 </div>
                 
@@ -202,7 +237,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                   <div className="max-w-4xl mx-auto">
                     <h3 className="text-xl font-semibold text-gray-900 mb-6 text-center">Complete Ranking</h3>
                     <div className="space-y-3">
-                      {session.rankingSystem.finalRanking.map((item: any, index: number) => (
+                      {session.rankingSystem.finalRanking.map((item: { apartment: { id: string; name: string; address: string; rent: number }; rank: number; totalVotes: number; winPercentage: number }, index: number) => (
                         <div 
                           key={`${item.apartment.id}-${index}`}
                           className={`bg-white rounded-lg p-4 shadow-sm border-l-4 ${
@@ -293,7 +328,7 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
                       </div>
                     )}
                     <p className="text-white/80 mt-2">
-                      Click to copy the code: {" "}
+                      Click to copy the code: &nbsp;
                       <button
                         onClick={copySessionCode}
                         disabled={isCopyDisabled}
@@ -413,6 +448,13 @@ export const HuntSession = ({ onLeaveSession, socketHook }: HuntSessionProps) =>
           )}
         </div>
       </div>
+      
+      {/* AI Loading Screen */}
+      <AILoadingScreen 
+        isVisible={isAIGenerating} 
+        message={aiMessage} 
+        roomCode={session?.code} 
+      />
     </div>
   );
 };

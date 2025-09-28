@@ -1,0 +1,490 @@
+{
+  "cluster_profiles": {
+    "0": {
+      "size": 106,
+      "avg_price": 0.0,
+      "avg_driving_time": 0.0,
+      "avg_walking_time": 0.0,
+      "avg_sqft": 0.0,
+      "avg_bedrooms": 0.0,
+      "avg_bathrooms": 0.0,
+      "avg_per_person_price": 0.0,
+      "avg_star_rating": 0.0,
+      "avg_amenities_score": 0.0,
+      "avg_culture_score": 0.0,
+      "avg_dei_score": 0.0,
+      "avg_reviews_score": 0.0,
+      "price_range": [
+        0.0,
+        0.0
+      ],
+      "driving_time_range": [
+        0.0,
+        0.0
+      ],
+      "apartments": [
+        {
+          "name": "Vue Apartments",
+          "address": "730 Harless St, Blacksburg, VA"
+        },
+        {
+          "name": "435 Harding Ave",
+          "address": "435 Harding Ave, Blacksburg, VA"
+        },
+        {
+          "name": "433 Harding Ave",
+          "address": "433 Harding Ave, Blacksburg, VA"
+        },
+        {
+          "name": "Prices Fork Apartments",
+          "address": "3860 Prices Fork Rd, Blacksburg, VA"
+        },
+        {
+          "name": "1228 Cambria St NE",
+          "address": "1228 Cambria St NE, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "685-745 Oak Tree Blvd NW, Christiansburg, VA"
+        },
+        {
+          "name": "Sundance Ridge",
+          "address": "509 Sunridge Dr, Blacksburg, VA"
+        },
+        {
+          "name": "1015 Montgomery St NW",
+          "address": "1015 Montgomery St NW, Blacksburg, VA"
+        },
+        {
+          "name": "90 Dudley Dr NW",
+          "address": "90 Dudley Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "325 Falling Br Rd",
+          "address": "325 Falling Br Rd, Christiansburg, VA"
+        },
+        {
+          "name": "911 Nellies Cave Rd",
+          "address": "911 Nellies Cave Rd, Blacksburg, VA"
+        },
+        {
+          "name": "1495 Sandy Cir",
+          "address": "1495 Sandy Cir, Blacksburg, VA"
+        },
+        {
+          "name": "1493 Sandy Cir",
+          "address": "1493 Sandy Cir, Blacksburg, VA"
+        },
+        {
+          "name": "1409 Merrimac Rd",
+          "address": "1409 Merrimac Rd, Blacksburg, VA"
+        },
+        {
+          "name": "Collegiate Court Apartments",
+          "address": "105 Collegiate Ct, Blacksburg, VA"
+        },
+        {
+          "name": "504 Cedar Orchard Dr W",
+          "address": "504 Cedar Orchard Dr W, Blacksburg, VA"
+        },
+        {
+          "name": "Huff Heritage Townhomes",
+          "address": "250 Huff Heritage Ln, Christiansburg, VA"
+        },
+        {
+          "name": "1107 Palmer Dr",
+          "address": "1107 Palmer Dr, Blacksburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "730 Twisted Oak Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "430 Twisted Oak Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "555 Keystone Dr NW",
+          "address": "555 Keystone Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "270 Tall Oak Blvd NW, Christiansburg, VA"
+        },
+        {
+          "name": "180 Hamilton Ave NW",
+          "address": "180 Hamilton Ave NW, Christiansburg, VA"
+        },
+        {
+          "name": "210 Roanoke St",
+          "address": "210 Roanoke St, Christiansburg, VA"
+        },
+        {
+          "name": "Westhill Subdivision",
+          "address": "2016 Coneflower Ln, Blacksburg, VA"
+        },
+        {
+          "name": "Piedmont Community",
+          "address": "1728 Donlee Dr, Blacksburg, VA"
+        },
+        {
+          "name": "Knollwood Community",
+          "address": "246 Sheliah Ct, Blacksburg, VA"
+        },
+        {
+          "name": "900 Palmer Dr",
+          "address": "900 Palmer Dr, Blacksburg, VA"
+        },
+        {
+          "name": "University Terrace",
+          "address": "1207 University Ter, Blacksburg, VA"
+        },
+        {
+          "name": "Westhill Community",
+          "address": "1050 Balsam Ln, Blacksburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "1310 Providence Blvd NW, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "200 Twg St, Christiansburg, VA"
+        },
+        {
+          "name": "1010 Madison Ln",
+          "address": "1010 Madison Ln, Blacksburg, VA"
+        },
+        {
+          "name": "Skylar Drive Community",
+          "address": "375 Skylar Dr, Christiansburg, VA"
+        },
+        {
+          "name": "1385 Wall St",
+          "address": "1385 Wall St, Christiansburg, VA"
+        },
+        {
+          "name": "2771 Wrights Way",
+          "address": "2771 Wrights Way, Blacksburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "505 Twisted Oak Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "Huff Heritage Townhomes",
+          "address": "115 Huff Heritage Ln, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "1045 Oak Tree Blvd, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "260 Tall Oak Blvd, Christiansburg, VA"
+        },
+        {
+          "name": "1320 N Main St",
+          "address": "1320 N Main St, Blacksburg, VA"
+        },
+        {
+          "name": "Hunter's Ridge",
+          "address": "1470 Seneca Dr, Blacksburg, VA"
+        },
+        {
+          "name": "The Oaks Community",
+          "address": "330 Silver Leaf Dr, Christiansburg, VA"
+        },
+        {
+          "name": "Wyatt Farms",
+          "address": "2229 Birch Leaf Ln NE, Blacksburg, VA"
+        },
+        {
+          "name": "The Orchards",
+          "address": "2630 Blossom Trail E, Blacksburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "190 Twig St, Christiansburg, VA"
+        },
+        {
+          "name": "Huff Heritage Townhomes",
+          "address": "360 Huff Heritage Ln, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "500 Twisted Oak Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "200 Amber Cir NW, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "1055 Oak Tree Blvd NW, Christiansburg, VA"
+        },
+        {
+          "name": "105 Oak Meadow Ln",
+          "address": "105 Oak Meadow Ln, Blacksburg, VA"
+        },
+        {
+          "name": "Kent Square Condos",
+          "address": "202 S Main St, Blacksburg, VA"
+        },
+        {
+          "name": "260 Lucas St",
+          "address": "260 Lucas St, Christiansburg, VA"
+        },
+        {
+          "name": "Pheasant Run",
+          "address": "246 Pheasant Run Dr, Blacksburg, VA"
+        },
+        {
+          "name": "60 Alexander Ct NW",
+          "address": "60 Alexander Ct NW, Christiansburg, VA"
+        },
+        {
+          "name": "Clover Valley Phase II",
+          "address": "Clover Valley Phase II, Blacksburg, VA"
+        },
+        {
+          "name": "Madison Apartment Homes",
+          "address": "Madison Apartment Homes, Christiansburg, VA"
+        },
+        {
+          "name": "Oak Tree Community",
+          "address": "365 Tall Oak Blvd NW, Christiansburg, VA"
+        },
+        {
+          "name": "402 Berryfield Ln",
+          "address": "402 Berryfield Ln, Blacksburg, VA"
+        },
+        {
+          "name": "Hilltop Apartments",
+          "address": "Hilltop Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "130 Roudabush Dr NW",
+          "address": "130 Roudabush Dr NW, Christiansburg, VA"
+        },
+        {
+          "name": "The Summit at Uptown",
+          "address": "The Summit at Uptown, Blacksburg, VA"
+        },
+        {
+          "name": "1065 Forest St",
+          "address": "1065 Forest St, Blacksburg, VA"
+        },
+        {
+          "name": "Fourteen35 Apartments",
+          "address": "Fourteen35 Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "1210 Stafford Dr",
+          "address": "1210 Stafford Dr, Blacksburg, VA"
+        },
+        {
+          "name": "1005 Montgomery St",
+          "address": "1005 Montgomery St, Blacksburg, VA"
+        },
+        {
+          "name": "Terpence Apartments",
+          "address": "Terpence Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Union Blacksburg",
+          "address": "Union Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "801 S Main St",
+          "address": "801 S Main St, Blacksburg, VA"
+        },
+        {
+          "name": "The Flats at Blacksburg",
+          "address": "The Flats at Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "2003 Carroll Dr",
+          "address": "2003 Carroll Dr, Blacksburg, VA"
+        },
+        {
+          "name": "208 Wharton St",
+          "address": "208 Wharton St, Blacksburg, VA"
+        },
+        {
+          "name": "701 S Main St",
+          "address": "701 S Main St, Blacksburg, VA"
+        },
+        {
+          "name": "Haven Blacksburg",
+          "address": "Haven Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "Cedar Pointe Apartments",
+          "address": "Cedar Pointe Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "The Landing at Stonegate",
+          "address": "The Landing at Stonegate, Blacksburg, VA"
+        },
+        {
+          "name": "Park37",
+          "address": "Park37, Blacksburg, VA"
+        },
+        {
+          "name": "Hub Blacksburg",
+          "address": "Hub Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "The Adams at Peppers Ferry",
+          "address": "The Adams at Peppers Ferry, Christiansburg, VA"
+        },
+        {
+          "name": "Brexx at Blacksburg",
+          "address": "Brexx at Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "Fieldstone Family Apartments",
+          "address": "Fieldstone Family Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Hethwood Communities",
+          "address": "Hethwood Communities, Blacksburg, VA"
+        },
+        {
+          "name": "709/711 Giles Rd",
+          "address": "709/711 Giles Rd, Blacksburg, VA"
+        },
+        {
+          "name": "East Roanoke Street",
+          "address": "East Roanoke Street, Blacksburg, VA"
+        },
+        {
+          "name": "203-209 Tee Street",
+          "address": "203-209 Tee Street, Blacksburg, VA"
+        },
+        {
+          "name": "Foxridge Apartment Homes",
+          "address": "Foxridge Apartment Homes, Blacksburg, VA"
+        },
+        {
+          "name": "Mt. Tabor Village Condos",
+          "address": "Mt. Tabor Village Condos, Blacksburg, VA"
+        },
+        {
+          "name": "Highlands at Huckleberry Ridge",
+          "address": "Highlands at Huckleberry Ridge, Blacksburg, VA"
+        },
+        {
+          "name": "Rutherford Townhomes",
+          "address": "Rutherford Townhomes, Blacksburg, VA"
+        },
+        {
+          "name": "Collegiate Suites of Blacksburg",
+          "address": "Collegiate Suites of Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "1711 Apartments",
+          "address": "1711 Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Terrace View",
+          "address": "Terrace View, Blacksburg, VA"
+        },
+        {
+          "name": "Lantern Ridge Apartments",
+          "address": "Lantern Ridge Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "The Mill at Blacksburg",
+          "address": "The Mill at Blacksburg, Blacksburg, VA"
+        },
+        {
+          "name": "Ridgeview Apartments",
+          "address": "Ridgeview Apartments, Christiansburg, VA"
+        },
+        {
+          "name": "Windsor Hills Apartments",
+          "address": "Windsor Hills Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Shawnee Apartments",
+          "address": "Shawnee Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Ridgewood Village Apts",
+          "address": "Ridgewood Village Apts, Blacksburg, VA"
+        },
+        {
+          "name": "The Reserve at Knollwood",
+          "address": "The Reserve at Knollwood, Blacksburg, VA"
+        },
+        {
+          "name": "Stonegate and Carlton Scott Apartments",
+          "address": "Stonegate and Carlton Scott Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Chasewood Apartments",
+          "address": "Chasewood Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "The Edge",
+          "address": "The Edge, Blacksburg, VA"
+        },
+        {
+          "name": "Maple Ridge Townhomes",
+          "address": "Maple Ridge Townhomes, Blacksburg, VA"
+        },
+        {
+          "name": "Apartment Heights",
+          "address": "Apartment Heights, Blacksburg, VA"
+        },
+        {
+          "name": "300 McDonald Street Apartments",
+          "address": "300 McDonald Street Apartments, Blacksburg, VA"
+        },
+        {
+          "name": "Smiths Landing Apartments",
+          "address": "Smiths Landing Apartments, Blacksburg, VA"
+        }
+      ]
+    },
+    "1": {
+      "size": 1,
+      "avg_price": 0.0,
+      "avg_driving_time": 0.0,
+      "avg_walking_time": 0.0,
+      "avg_sqft": 0.0,
+      "avg_bedrooms": 0.0,
+      "avg_bathrooms": 0.0,
+      "avg_per_person_price": 0.0,
+      "avg_star_rating": 0.0,
+      "avg_amenities_score": 0.0,
+      "avg_culture_score": 0.0,
+      "avg_dei_score": 0.0,
+      "avg_reviews_score": 0.0,
+      "price_range": [
+        0.0,
+        0.0
+      ],
+      "driving_time_range": [
+        0.0,
+        0.0
+      ],
+      "apartments": [
+        {
+          "name": "Creekside",
+          "address": "Creekside, Blacksburg, VA"
+        }
+      ]
+    }
+  },
+  "cluster_descriptions": {
+    "0": "Budget-friendly Compact apartments Very close to campus",
+    "1": "Budget-friendly Compact apartments Very close to campus"
+  },
+  "summary": {
+    "total_clusters": 2,
+    "total_apartments": 107
+  }
+}

@@ -8,6 +8,8 @@ import { sampleApartments } from '@/data/apartments';
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAIGenerating, setIsAIGenerating] = useState(false);
+  const [aiMessage, setAiMessage] = useState('');
   const [sessionState, setSessionState] = useState<SessionState>({
     session: null,
     currentUser: null,
@@ -206,6 +208,35 @@ export const useSocket = () => {
       // Session will be updated via session-updated event
     });
 
+    // AI Generation events
+    socket.on('ai-generating-apartments', ({ message, roomCode }: { message: string; roomCode: string }) => {
+      console.log('🤖 AI generating apartments:', message);
+      setIsAIGenerating(true);
+      setAiMessage(message);
+    });
+
+    socket.on('ai-generation-complete', ({ message, roomCode }: { message: string; roomCode: string }) => {
+      console.log('✅ AI generation complete:', message);
+      setIsAIGenerating(false);
+      setAiMessage(message);
+      
+      // Hide the loading message after a short delay
+      setTimeout(() => {
+        setAiMessage('');
+      }, 3000);
+    });
+
+    socket.on('ai-generation-error', ({ message, roomCode }: { message: string; roomCode: string }) => {
+      console.log('❌ AI generation error:', message);
+      setIsAIGenerating(false);
+      setAiMessage(message);
+      
+      // Hide the error message after a longer delay
+      setTimeout(() => {
+        setAiMessage('');
+      }, 5000);
+    });
+
     socket.on('error', ({ message }: { message: string }) => {
       console.error('🚫 Socket error:', message);
       setError(message);
@@ -350,6 +381,8 @@ export const useSocket = () => {
     isConnected,
     sessionState,
     error,
+    isAIGenerating,
+    aiMessage,
     clearError,
     joinSession,
     createSession,
