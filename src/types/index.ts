@@ -12,6 +12,26 @@ export interface Apartment {
   description: string;
 }
 
+export interface Complex {
+  id?: string;
+  name: string;
+  address: string;
+  price_range: string;
+  bedroom_range: string;
+  // Optional fields that might exist
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  phone?: string;
+  website?: string;
+  description?: string;
+  amenities?: string[];
+  pet_policy?: string;
+  parking_available?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Roommate {
   id: string;
   nickname: string;
@@ -32,9 +52,11 @@ export interface Matchup {
   rightApartment: Apartment;
   votes: Vote[];
   winner?: string; // apartment ID
-  status: 'active' | 'completed' | 'tie';
+  status: 'active' | 'completed' | 'tie' | 'counting-down';
   createdAt: Date;
   completedAt?: Date;
+  countdownSeconds?: number;
+  countdownStartTime?: Date;
 }
 
 export interface MatchupLog {
@@ -49,13 +71,11 @@ export interface MatchupLog {
 export interface LobbySettings {
   // Voting settings
   requireUnanimousVoting: boolean;
-  allowVetoOverride: boolean;
   minimumRatingToPass: number; // 1-5 stars
   
   // Session management
-  allowMembersToControlNavigation: boolean;
   autoAdvanceOnConsensus: boolean;
-  sessionTimeout: number; // minutes
+  numberOfRounds: number; // number of rounds to play
   
   // Filtering preferences
   maxRent: number | null;
@@ -68,12 +88,12 @@ export interface LobbySettings {
   
   // Notification preferences
   notifyOnNewRatings: boolean;
-  notifyOnVetos: boolean;
 }
 
 export interface HuntSession {
   id: string;
   code: string;
+  name: string;
   hostId: string;
   roommates: Roommate[];
   currentMatchup: Matchup | null;
@@ -111,6 +131,10 @@ export interface SocketEvents {
   'vote-added': { vote: Vote };
   'matchup-completed': { matchup: Matchup };
   'round-force-ended': { matchup: Matchup };
+  'countdown-started': { matchup: Matchup; secondsRemaining: number };
+  'countdown-update': { matchup: Matchup; secondsRemaining: number };
+  'countdown-cancelled': { matchup: Matchup };
+  'tournament-completed': { champion: Apartment };
   'settings-updated': { settings: LobbySettings };
   'error': { message: string };
 }

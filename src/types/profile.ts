@@ -36,12 +36,14 @@ export interface UserPreferences {
 
 export interface UserProfile {
   id: string;
+  user_id: string; // References auth.users.id
+  username: string;
   nickname: string;
   avatar: string;
   email?: string;
   preferences: UserPreferences;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: string;
+  updated_at: string;
 }
 
 export const defaultPreferences: UserPreferences = {

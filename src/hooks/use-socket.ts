@@ -2,19 +2,51 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { SessionState, HuntSession, Roommate, Vote, Matchup, LobbySettings } from '@/types';
-import { sampleApartments } from '@/data/apartments';
+import { SessionState, HuntSession, Roommate, Vote, Matchup, LobbySettings, Apartment } from '@/types';
+import { fetchApartments } from '@/lib/apartments';
 
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>({
     session: null,
     currentUser: null,
-    apartments: sampleApartments,
+    apartments: [],
     isConnected: false
   });
   
   const socketRef = useRef<Socket | null>(null);
+
+  // Fetch apartments from database on mount
+  useEffect(() => {
+    const loadApartments = async () => {
+      try {
+        console.log('🔍 Frontend: Loading apartments from database...');
+        const apartments = await fetchApartments();
+        console.log(`✅ Frontend: Loaded ${apartments.length} apartments from database`);
+        setSessionState(prev => ({ ...prev, apartments }));
+      } catch (error) {
+        console.error('❌ Frontend: Failed to load apartments:', error);
+        // Keep empty array on error
+      }
+    };
+
+    loadApartments();
+  }, []);
+
+  // Prefer unique by nickname (stable across reconnects), fallback to id
+  const dedupeRoommates = (roommates: Roommate[]): Roommate[] => {
+    const map = new Map<string, Roommate>();
+    for (const rm of roommates) {
+      const key = (rm.nickname || rm.id).toLowerCase();
+      const existing = map.get(key);
+      // Favor entries marked online
+      if (!existing || (rm.isOnline && !existing.isOnline)) {
+        map.set(key, rm);
+      }
+    }
+    return Array.from(map.values());
+  };
 
   useEffect(() => {
     // Initialize socket connection
@@ -40,41 +72,63 @@ export const useSocket = () => {
     // Session events
     socket.on('session-created', ({ session, currentUser }: { session: HuntSession; currentUser: Roommate }) => {
       console.log('Session created:', session.code);
+      const uniqueRoommates = dedupeRoommates(session.roommates);
       setSessionState(prev => ({
         ...prev,
-        session,
-        currentUser
+        session: { ...session, roommates: uniqueRoommates },
+        currentUser: currentUser
       }));
+      try { localStorage.setItem('padmatch-room-code', session.code); } catch {}
     });
 
     socket.on('session-joined', ({ session, currentUser }: { session: HuntSession; currentUser: Roommate }) => {
-      console.log('Session joined:', session.code);
+      console.log('✅ Session joined successfully:', session.code);
+      const uniqueRoommates = dedupeRoommates(session.roommates);
       setSessionState(prev => ({
         ...prev,
-        session,
-        currentUser
+        session: { ...session, roommates: uniqueRoommates },
+        currentUser: currentUser
       }));
+      try { localStorage.setItem('padmatch-room-code', session.code); } catch {}
     });
 
     socket.on('session-updated', ({ session }: { session: HuntSession }) => {
       console.log('Session updated');
-      setSessionState(prev => ({
-        ...prev,
-        session
-      }));
+      console.log('Session currentMatchup:', session.currentMatchup);
+      console.log('Session championApartment:', session.championApartment);
+      const uniqueRoommates = dedupeRoommates(session.roommates);
+      setSessionState(prev => {
+        let nextCurrentUser = prev.currentUser;
+        if (nextCurrentUser) {
+          const byId = uniqueRoommates.find(r => r.id === nextCurrentUser!.id);
+          const byNick = uniqueRoommates.find(r => r.nickname.toLowerCase() === nextCurrentUser!.nickname.toLowerCase());
+          nextCurrentUser = byId || byNick || nextCurrentUser;
+        }
+        return {
+          ...prev,
+          session: { ...session, roommates: uniqueRoommates },
+          currentUser: nextCurrentUser
+        };
+      });
     });
 
     socket.on('roommate-joined', ({ roommate }: { roommate: Roommate }) => {
       console.log('Roommate joined:', roommate.nickname);
       setSessionState(prev => {
         if (!prev.session) return prev;
-        const updatedSession = {
-          ...prev.session,
-          roommates: [...prev.session.roommates, roommate]
-        };
+        const index = prev.session.roommates.findIndex(
+          r => r.id === roommate.id || r.nickname.toLowerCase() === roommate.nickname.toLowerCase()
+        );
+        const roommates = index !== -1
+          ? prev.session.roommates.map(r => (
+              r.id === roommate.id || r.nickname.toLowerCase() === roommate.nickname.toLowerCase()
+                ? { ...r, ...roommate, isOnline: true }
+                : r
+            ))
+          : [...prev.session.roommates, { ...roommate, isOnline: true }];
         return {
           ...prev,
-          session: updatedSession
+          session: { ...prev.session, roommates }
         };
       });
     });
@@ -106,13 +160,85 @@ export const useSocket = () => {
       // Session will be updated via session-updated event
     });
 
+    socket.on('tournament-completed', ({ champion }: { champion: Apartment }) => {
+      console.log('Tournament completed! Champion:', champion);
+      // Session will be updated via session-updated event
+    });
+
+    socket.on('countdown-started', ({ matchup, secondsRemaining }: { matchup: Matchup; secondsRemaining: number }) => {
+      console.log('Countdown started:', secondsRemaining, 'seconds remaining');
+      // Update the matchup with countdown state
+      setSessionState(prev => {
+        if (!prev.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            currentMatchup: matchup
+          }
+        };
+      });
+    });
+
+    socket.on('countdown-update', ({ matchup, secondsRemaining }: { matchup: Matchup; secondsRemaining: number }) => {
+      console.log('Client: Countdown update received:', secondsRemaining, 'seconds remaining');
+      console.log('Client: Matchup status:', matchup.status);
+      // Update the matchup with new countdown time
+      setSessionState(prev => {
+        if (!prev.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            currentMatchup: matchup
+          }
+        };
+      });
+    });
+
+    socket.on('countdown-cancelled', ({ matchup }: { matchup: Matchup }) => {
+      console.log('Countdown cancelled');
+      // Update the matchup to remove countdown state
+      setSessionState(prev => {
+        if (!prev.session) return prev;
+        return {
+          ...prev,
+          session: {
+            ...prev.session,
+            currentMatchup: matchup
+          }
+        };
+      });
+    });
+
     socket.on('round-force-ended', ({ matchup }: { matchup: Matchup }) => {
       console.log('Round force ended:', matchup);
       // Session will be updated via session-updated event
     });
 
     socket.on('error', ({ message }: { message: string }) => {
-      console.error('Socket error:', message);
+      console.error('🚫 Socket error:', message);
+      setError(message);
+      
+      // Debug info to understand when this happens
+      const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';
+      const storedCode = (() => {
+        try { return localStorage.getItem('padmatch-room-code') || 'none'; } catch { return 'none'; }
+      })();
+      
+      console.log('🔍 Error context:', {
+        error: message,
+        currentPath,
+        storedCode,
+        currentSession: sessionState.session?.code || 'none',
+        socketId: socket.id
+      });
+      
+      if (message === 'Session not found') {
+        console.log('🧹 Cleaning up after session not found');
+        try { localStorage.removeItem('padmatch-room-code'); } catch {}
+        setSessionState(prev => ({ ...prev, session: null }));
+      }
     });
 
     // Cleanup on unmount
@@ -137,7 +263,8 @@ export const useSocket = () => {
       return;
     }
     
-    console.log('Joining session with code:', code);
+    console.log('🔗 Attempting to join session:', { code, nickname, socketId: socketRef.current.id });
+    try { localStorage.setItem('padmatch-room-code', code); } catch {}
     socketRef.current.emit('join-session', { code, nickname });
   };
 
@@ -188,16 +315,55 @@ export const useSocket = () => {
     socketRef.current.emit('update-settings', { settings });
   };
 
+  const updateRoomName = (name: string) => {
+    if (!socketRef.current) {
+      console.error('Socket not connected');
+      return;
+    }
+    
+    console.log('🏠 Client: Updating room name to:', name);
+    console.log('🏠 Client: Socket ID:', socketRef.current.id);
+    console.log('🏠 Client: Current session:', sessionState.session?.code);
+    socketRef.current.emit('update-room-name', { name });
+    
+    // Add listeners for the response
+    socketRef.current.once('room-name-updated', ({ name: updatedName }: { name: string }) => {
+      console.log('✅ Room name update confirmed:', updatedName);
+    });
+    
+    // Listen for potential errors
+    socketRef.current.once('error', ({ message }: { message: string }) => {
+      console.error('❌ Room name update failed:', message);
+    });
+  };
+
+  const leaveSession = () => {
+    const s = sessionState.session;
+    if (socketRef.current && s) {
+      socketRef.current.emit('leave-session', { sessionId: s.id });
+    }
+    try { localStorage.removeItem('padmatch-room-code'); } catch {}
+    setSessionState(prev => ({ ...prev, session: null }));
+  };
+
+  const clearError = () => {
+    setError(null);
+  };
+
   return {
     socket: socketRef.current,
     isConnected,
     sessionState,
+    error,
+    clearError,
     joinSession,
     createSession,
     voteApartment,
     forceEndRound,
     hostTiebreak,
     startSession,
-    updateSettings
+    updateSettings,
+    updateRoomName,
+    leaveSession
   };
 };

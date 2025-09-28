@@ -1,44 +1,186 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { UserProfile, defaultPreferences } from '@/types/profile';
+import { UserProfile as AuthUserProfile } from '@/lib/supabase';
+import { authService } from '@/lib/auth';
+import { Navbar } from '@/components/navbar';
+import { generateUserAvatar } from '@/lib/avatar-generator';
+import { supabase } from '@/lib/supabase';
 
-export default function ProfilePage() {
+interface ProfilePageProps {
+  currentUser?: AuthUserProfile | null;
+  onUserUpdate?: (user: AuthUserProfile) => void;
+}
+
+export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePageProps = {}) {
   const router = useRouter();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [favorites, setFavorites] = useState<any[]>([]); // We'll add apartment favorites later
+  const [user, setUser] = useState<AuthUserProfile | null>(currentUser || null);
+  const [profileData, setProfileData] = useState<any | null>(null); // New state to hold fetched data
+  const [favorites, setFavorites] = useState<any[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadProfile();
-    loadFavorites();
-  }, []);
+  // Form state for preferences (now synced with Supabase)
+  const [budgetMax, setBudgetMax] = useState(2000);
+  const [beds, setBeds] = useState(1);
+  const [baths, setBaths] = useState(1);
+  const [maxWalkTime, setMaxWalkTime] = useState(15); // minutes
+  const [maxDriveTime, setMaxDriveTime] = useState(20); // minutes
+  
+  // Tags state
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
-  const loadProfile = () => {
+  // Tags data
+  const tagCategories = {
+    amenities: [
+      'In-Unit Washer/Dryer', 'Washer/Dryer Hookup', 'Dishwasher', 'Fully Furnished',
+      'Air Conditioning', 'Hardwood Floors', 'Stainless Steel Appliances', 'Granite Countertops',
+      'Walk-In Closets', 'Private Patio/Balcony', 'Swimming Pool', 'Fitness Center / Gym',
+      'Clubhouse', 'On-Site Laundry', 'Off-Street Parking', 'Garage Parking',
+      'Utilities Included', 'Fireplace', 'Smart Home Technology', 'Extra Storage', 'Office/Den Space'
+    ],
+    culture: [
+      'Student-Focused', 'Quiet Residential', 'Family-Friendly', 'Social & Lively',
+      'Modern & Upscale', 'Convenient to Downtown', 'Close to Nature/Trails', 'Community-Oriented',
+      'Luxury Living', 'All-Inclusive Living'
+    ],
+    dei: [
+      'Pet-Friendly', 'Wheelchair Accessible', 'Main-Floor Bedroom', 'Equal Housing Opportunity',
+      'On Public Transit Route', 'Roommate Matching Available', 'Individual Leases',
+      'Short-Term Leases Available', 'Community Events'
+    ]
+  };
+
+  // --- STEP 1: A clean function to ONLY fetch data ---
+  const fetchProfileData = useCallback(async (userId: string) => {
+    setIsLoading(true);
     try {
-      const saved = localStorage.getItem('padmatch-profile');
-      console.log('Loading profile from localStorage:', saved);
-      if (saved) {
-        const profileData = JSON.parse(saved);
-        console.log('Parsed profile data:', profileData);
-        setProfile(profileData);
+      const { data, error } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error loading preferences:', error);
+        setProfileData(null); // Set to null on error
       } else {
-        console.log('No saved profile found, creating default');
-        // Create default profile
-        const defaultProfile: UserProfile = {
-          id: `user-${Date.now()}`,
-          nickname: '',
-          avatar: '',
-          preferences: defaultPreferences,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        setProfile(defaultProfile);
+        setProfileData(data); // Store the entire profile object
       }
-    } catch (error) {
-      console.error('Error loading profile:', error);
+    } catch (err) {
+      console.error('Catastrophic error loading preferences:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []); // Empty dependency array means this function is created once
+
+  // --- STEP 2: useEffect to fetch data when the user changes ---
+  useEffect(() => {
+    async function loadUserAndProfile() {
+      let finalUser = currentUser;
+      if (!finalUser) {
+        const { user: authUser } = await authService.getCurrentUser();
+        finalUser = authUser;
+      }
+      
+      if (finalUser) {
+        setUser(finalUser);
+        fetchProfileData(finalUser.user_id);
+    } else {
+        router.push('/');
+      }
+    }
+    loadUserAndProfile();
+    loadFavorites(); // This can stay as is
+  }, [currentUser, fetchProfileData, router]);
+
+
+  // Helper function to safely parse array-like strings
+  const parseArrayString = (value: any): string[] => {
+    // Return an empty array if the value is null, not a string, or empty
+    if (!value || typeof value !== 'string') {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(value);
+      // Ensure the parsed result is actually an array
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      // If JSON.parse fails, return an empty array
+      console.error("Failed to parse array string:", value, e);
+      return [];
     }
   };
+
+  // --- STEP 3: A SEPARATE useEffect to sync state FROM the fetched data ---
+  useEffect(() => {
+    if (profileData) {
+      console.log('🔄 Syncing state from fetched profileData:', profileData);
+      
+      // Use the helper function to parse the data
+      const walkTimeArray = parseArrayString(profileData['Preferred Commute Time (Walk)']);
+      const walkTime = parseInt(walkTimeArray[0]) || 15;
+      const amenities = parseArrayString(profileData['Amenities']);
+      const culture = parseArrayString(profileData['Culture']);
+      const dei = parseArrayString(profileData['DEI']);
+      const idealApartment = parseArrayString(profileData['ideal_apartment']);
+
+      setMaxWalkTime(walkTime);
+      setMaxDriveTime(20); // Default
+
+      // Extract budget from ideal apartment
+      const budgetItem = idealApartment.find((item: string) => item.includes('Under $'));
+      if (budgetItem) {
+        const match = budgetItem.match(/Under \$(\d+)/);
+        if (match) {
+          setBudgetMax(parseInt(match[1]));
+        }
+      }
+
+      // Extract roommates from ideal apartment
+      const roommatesItem = idealApartment.find((item: string) => item.includes('Roommates'));
+      if (roommatesItem) {
+        const match = roommatesItem.match(/(\d+)\s+Roommates/);
+        if (match) {
+          setBeds(parseInt(match[1]));
+        }
+      }
+
+      // Your tag logic remains the same, but it's now in a predictable place
+      const newSelectedTags = new Set<string>();
+      
+      // Map amenities from database to form tags
+      amenities.forEach((amenity: string) => {
+        newSelectedTags.add(amenity);
+      });
+
+      // Map culture tags
+      culture.forEach((cultureItem: string) => {
+        newSelectedTags.add(cultureItem);
+      });
+
+      // Map DEI tags
+      dei.forEach((deiItem: string) => {
+        newSelectedTags.add(deiItem);
+      });
+
+      // Map ideal apartment tags
+      idealApartment.forEach((item: string) => {
+        if (item === 'Utilities Included') {
+          newSelectedTags.add('Utilities Included');
+        }
+        if (item === 'Furnished') {
+          newSelectedTags.add('Fully Furnished');
+        }
+      });
+
+      setSelectedTags(newSelectedTags);
+      console.log('✅ State sync complete. Tags set to:', Array.from(newSelectedTags));
+    }
+  }, [profileData]); // This effect runs ONLY when profileData changes
 
   const loadFavorites = () => {
     try {
@@ -51,36 +193,161 @@ export default function ProfilePage() {
     }
   };
 
-  const saveProfile = (updatedProfile: UserProfile) => {
+  const handleSave = async () => {
+    if (!user || !user.nickname?.trim()) return;
+    
+    setIsSaving(true);
+    setSaveError(null);
+    
     try {
-      localStorage.setItem('padmatch-profile', JSON.stringify(updatedProfile));
-      setProfile(updatedProfile);
+      const { user: updatedUser, error } = await authService.updateProfile({
+        nickname: user.nickname.trim()
+      });
+      
+      if (error) {
+        setSaveError(error);
+        setIsSaving(false);
+        return;
+      }
+      
+      if (updatedUser) {
+        setUser(updatedUser);
+        setHasUnsavedChanges(false);
+        
+        // Notify parent component of user update
+        if (onUserUpdate) {
+          onUserUpdate(updatedUser);
+        }
+        
+        // Save preferences to Supabase using array format
+        console.log('💾 Saving preferences with selected tags:', Array.from(selectedTags));
+        
+        const amenities = [];
+        // Map all amenities from form tags to database values
+        if (selectedTags.has('In-Unit Washer/Dryer')) amenities.push('In-Unit Washer/Dryer');
+        if (selectedTags.has('Washer/Dryer Hookup')) amenities.push('Washer/Dryer Hookup');
+        if (selectedTags.has('Dishwasher')) amenities.push('Dishwasher');
+        if (selectedTags.has('Fully Furnished')) amenities.push('Fully Furnished');
+        if (selectedTags.has('Air Conditioning')) amenities.push('Air Conditioning');
+        if (selectedTags.has('Hardwood Floors')) amenities.push('Hardwood Floors');
+        if (selectedTags.has('Stainless Steel Appliances')) amenities.push('Stainless Steel Appliances');
+        if (selectedTags.has('Granite Countertops')) amenities.push('Granite Countertops');
+        if (selectedTags.has('Walk-In Closets')) amenities.push('Walk-In Closets');
+        if (selectedTags.has('Private Patio/Balcony')) amenities.push('Private Patio/Balcony');
+        if (selectedTags.has('Swimming Pool')) amenities.push('Swimming Pool');
+        if (selectedTags.has('Fitness Center / Gym')) amenities.push('Fitness Center / Gym');
+        if (selectedTags.has('Clubhouse')) amenities.push('Clubhouse');
+        if (selectedTags.has('On-Site Laundry')) amenities.push('On-Site Laundry');
+        if (selectedTags.has('Off-Street Parking')) amenities.push('Off-Street Parking');
+        if (selectedTags.has('Garage Parking')) amenities.push('Garage Parking');
+        if (selectedTags.has('Utilities Included')) amenities.push('Utilities Included');
+        if (selectedTags.has('Fireplace')) amenities.push('Fireplace');
+        if (selectedTags.has('Smart Home Technology')) amenities.push('Smart Home Technology');
+        if (selectedTags.has('Extra Storage')) amenities.push('Extra Storage');
+        if (selectedTags.has('Office/Den Space')) amenities.push('Office/Den Space');
+        
+        console.log('🏠 Mapped amenities for database:', amenities);
+
+        const culture = [];
+        // Map all culture tags
+        if (selectedTags.has('Student-Focused')) culture.push('Student-Focused');
+        if (selectedTags.has('Quiet Residential')) culture.push('Quiet Residential');
+        if (selectedTags.has('Family-Friendly')) culture.push('Family-Friendly');
+        if (selectedTags.has('Social & Lively')) culture.push('Social & Lively');
+        if (selectedTags.has('Modern & Upscale')) culture.push('Modern & Upscale');
+        if (selectedTags.has('Convenient to Downtown')) culture.push('Convenient to Downtown');
+        if (selectedTags.has('Close to Nature/Trails')) culture.push('Close to Nature/Trails');
+        if (selectedTags.has('Community-Oriented')) culture.push('Community-Oriented');
+        if (selectedTags.has('Luxury Living')) culture.push('Luxury Living');
+        if (selectedTags.has('All-Inclusive Living')) culture.push('All-Inclusive Living');
+
+        const dei = [];
+        // Map all DEI tags
+        if (selectedTags.has('Pet-Friendly')) dei.push('Pet-Friendly');
+        if (selectedTags.has('Wheelchair Accessible')) dei.push('Wheelchair Accessible');
+        if (selectedTags.has('Main-Floor Bedroom')) dei.push('Main-Floor Bedroom');
+        if (selectedTags.has('Equal Housing Opportunity')) dei.push('Equal Housing Opportunity');
+        if (selectedTags.has('On Public Transit Route')) dei.push('On Public Transit Route');
+        if (selectedTags.has('Roommate Matching Available')) dei.push('Roommate Matching Available');
+        if (selectedTags.has('Individual Leases')) dei.push('Individual Leases');
+        if (selectedTags.has('Short-Term Leases Available')) dei.push('Short-Term Leases Available');
+        if (selectedTags.has('Community Events')) dei.push('Community Events');
+
+        const idealApartment = [];
+        idealApartment.push(`${beds} Roommates`);
+        idealApartment.push(`Under $${budgetMax}`);
+        if (selectedTags.has('Utilities Included')) idealApartment.push('Utilities Included');
+        if (selectedTags.has('Fully Furnished')) idealApartment.push('Furnished');
+
+        const { error: prefError } = await supabase
+          .from('user_profiles')
+          .update({
+            'Preferred Commute Time (Walk)': [maxWalkTime],
+            'Preferred Commute Time (Drive)': [maxDriveTime],
+            'Amenities': amenities,
+            'Culture': culture,
+            'DEI': dei,
+            'ideal_apartment': idealApartment,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', user.user_id);
+
+        if (prefError) {
+          console.error('Error saving preferences:', prefError);
+        }
+      }
     } catch (error) {
-      console.error('Error saving profile:', error);
+      setSaveError(error instanceof Error ? error.message : 'An unknown error occurred');
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
-    if (!profile) return;
-    
-    const updatedProfile = {
-      ...profile,
-      ...updates,
-      updatedAt: new Date(),
-    };
-    saveProfile(updatedProfile);
+  const handleNicknameChange = (value: string) => {
+    if (!user) return;
+    setUser({ ...user, nickname: value });
+    setHasUnsavedChanges(value.trim() !== user.nickname);
   };
 
-  const updatePreferences = (preferenceUpdates: Partial<UserProfile['preferences']>) => {
-    if (!profile) return;
-    
-    const updatedPreferences = {
-      ...profile.preferences,
-      ...preferenceUpdates,
-    };
-    
-    updateProfile({ preferences: updatedPreferences });
+  const handleBudgetChange = (max: number) => {
+    setBudgetMax(max);
+    setHasUnsavedChanges(true);
   };
+
+  const handleBedsChange = (value: number) => {
+    setBeds(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleBathsChange = (value: number) => {
+    setBaths(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleWalkTimeChange = (value: number) => {
+    setMaxWalkTime(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const handleDriveTimeChange = (value: number) => {
+    setMaxDriveTime(value);
+    setHasUnsavedChanges(true);
+  };
+
+  const toggleTag = (tag: string) => {
+    const newSelectedTags = new Set(selectedTags);
+    if (newSelectedTags.has(tag)) {
+      newSelectedTags.delete(tag);
+      console.log('❌ Removed tag:', tag, 'New set:', Array.from(newSelectedTags));
+    } else {
+      newSelectedTags.add(tag);
+      console.log('✅ Added tag:', tag, 'New set:', Array.from(newSelectedTags));
+    }
+    setSelectedTags(newSelectedTags);
+    setHasUnsavedChanges(true);
+  };
+
+  // Avatar functionality removed
 
   const removeFavorite = (apartmentId: string) => {
     const updatedFavorites = favorites.filter(apt => apt.id !== apartmentId);
@@ -88,7 +355,16 @@ export default function ProfilePage() {
     localStorage.setItem('padmatch-favorites', JSON.stringify(updatedFavorites));
   };
 
-  if (!profile) {
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
@@ -98,33 +374,7 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => router.push('/')}
-                className="text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <h1 className="text-xl font-bold text-gray-900">PadMatch</h1>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <button className="text-gray-400 hover:text-gray-600">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </button>
-              <div className="w-8 h-8 rounded-full bg-gray-300"></div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <Navbar currentUser={user} onLogout={handleLogout} />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -134,25 +384,17 @@ export default function ProfilePage() {
             <div className="bg-white rounded-lg p-6">
               <div className="flex items-center space-x-4 mb-6">
                 <div className="relative">
-                  {profile.avatar ? (
+                  <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg overflow-hidden">
                     <img
-                      src={profile.avatar}
+                      src={generateUserAvatar(user.username)}
                       alt="Profile"
-                      className="w-20 h-20 rounded-full border-4 border-white shadow-lg"
+                      className="w-full h-full object-cover"
                     />
-                  ) : (
-                    <div className="w-20 h-20 rounded-full bg-gray-200 border-4 border-white shadow-lg flex items-center justify-center">
-                      <span className="text-gray-500 text-2xl">👤</span>
-                    </div>
-                  )}
-                  <button className="absolute bottom-0 right-0 bg-blue-600 text-white p-2 rounded-full shadow-lg hover:bg-blue-700 transition-colors">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
+                  </div>
+                  {/* Avatar upload removed */}
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{profile.nickname || 'Your Name'}</h2>
+                  <h2 className="text-2xl font-bold text-gray-900">{user.nickname || 'Your Name'}</h2>
                 </div>
               </div>
 
@@ -164,10 +406,10 @@ export default function ProfilePage() {
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nickname</label>
                     <input
                       type="text"
-                      value={profile.nickname}
-                      onChange={(e) => updateProfile({ nickname: e.target.value })}
+                      value={user.nickname}
+                      onChange={(e) => handleNicknameChange(e.target.value)}
                       placeholder="Enter your nickname"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
                       maxLength={20}
                     />
                   </div>
@@ -181,102 +423,134 @@ export default function ProfilePage() {
                 {/* Budget */}
                 <div className="border border-gray-200 rounded-lg p-4">
                   <h4 className="font-medium text-gray-900 mb-3">Budget</h4>
-                  <div className="grid grid-cols-2 gap-4 mb-3">
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Min Rent</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <input
-                          type="number"
-                          value={profile.preferences.budget.min}
-                          onChange={(e) => updatePreferences({
-                            budget: { ...profile.preferences.budget, min: Number(e.target.value) }
-                          })}
-                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          min="0"
-                          step="50"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-600 mb-1">Max Rent</label>
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                        <input
-                          type="number"
-                          value={profile.preferences.budget.max}
-                          onChange={(e) => updatePreferences({
-                            budget: { ...profile.preferences.budget, max: Number(e.target.value) }
-                          })}
-                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          min={profile.preferences.budget.min}
-                          step="50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex space-x-4">
-                    <label className="flex items-center">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Max Rent Per Person</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
                       <input
-                        type="radio"
-                        name="budgetType"
-                        defaultChecked
-                        className="mr-2"
+                        type="number"
+                        value={budgetMax}
+                        onChange={(e) => handleBudgetChange(Number(e.target.value))}
+                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                        min="0"
+                        step="50"
+                        placeholder="2000"
                       />
-                      <span className="text-sm text-gray-700">Total Cost</span>
-                    </label>
-                    <label className="flex items-center">
-                      <input
-                        type="radio"
-                        name="budgetType"
-                        className="mr-2"
-                      />
-                      <span className="text-sm text-gray-700">Per Person</span>
-                    </label>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">Your maximum monthly rent contribution</p>
                   </div>
                 </div>
 
-                {/* Other Preferences */}
-                <div className="space-y-3">
+                {/* Bedrooms & Bathrooms */}
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Move Timing</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option>ASAP</option>
-                      <option>Within 1 month</option>
-                      <option>Within 3 months</option>
-                      <option>Within 6 months</option>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Beds</label>
+                    <select 
+                      value={beds} 
+                      onChange={(e) => handleBedsChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                    >
+                      <option value={0}>Studio</option>
+                      <option value={1}>1 Bed</option>
+                      <option value={2}>2 Beds</option>
+                      <option value={3}>3 Beds</option>
+                      <option value={4}>4+ Beds</option>
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Beds/Baths</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option>Studio</option>
-                      <option>1 Bed / 1 Bath</option>
-                      <option>2 Bed / 1 Bath</option>
-                      <option>2 Bed / 2 Bath</option>
-                      <option>3+ Bed / 2+ Bath</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location/Commute</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option>Within 15 minutes</option>
-                      <option>Within 30 minutes</option>
-                      <option>Within 45 minutes</option>
-                      <option>Within 1 hour</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Other Preferences</label>
-                    <select className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                      <option>Pet-friendly</option>
-                      <option>Furnished</option>
-                      <option>Parking included</option>
-                      <option>Utilities included</option>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Baths</label>
+                    <select 
+                      value={baths} 
+                      onChange={(e) => handleBathsChange(Number(e.target.value))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                    >
+                      <option value={1}>1 Bath</option>
+                      <option value={1.5}>1.5 Baths</option>
+                      <option value={2}>2 Baths</option>
+                      <option value={2.5}>2.5 Baths</option>
+                      <option value={3}>3+ Baths</option>
                     </select>
                   </div>
                 </div>
+
+                {/* Commute Preferences */}
+                <div className="border border-gray-200 rounded-lg p-4">
+                  <h4 className="font-medium text-gray-900 mb-3">Commute to Campus</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Max Walking Time</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={maxWalkTime}
+                          onChange={(e) => handleWalkTimeChange(Number(e.target.value))}
+                          className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                          min="1"
+                          max="60"
+                          step="1"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">min</span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-1">Max Driving Time</label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          value={maxDriveTime}
+                          onChange={(e) => handleDriveTimeChange(Number(e.target.value))}
+                          className="w-full pr-8 pl-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black"
+                          min="1"
+                          max="120"
+                          step="1"
+                        />
+                        <span className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-sm">min</span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">Maximum time you're willing to spend commuting to campus</p>
+                </div>
+
+                {/* Tags Section */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Preferences</h3>
+                  <div className="text-xs text-gray-500 mb-2">
+                    Debug: selectedTags = {Array.from(selectedTags).join(', ') || 'EMPTY'}
+                  </div>
+                  
+                  {Object.entries(tagCategories).map(([category, tags]) => (
+                    <div key={category} className="border border-gray-200 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 mb-3 capitalize">{category}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {tags.map((tag) => {
+                          const isSelected = selectedTags.has(tag);
+                          console.log(`🎨 Rendering tag "${tag}": ${isSelected ? 'SELECTED' : 'NOT SELECTED'}`);
+                          return (
+                          <button
+                            key={tag}
+                            onClick={() => toggleTag(tag)}
+                            className={`px-3 py-1 text-sm rounded-full border transition-colors ${
+                                isSelected
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-gray-700 border-gray-300 hover:border-blue-300'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
+
+              {/* Error Display */}
+              {saveError && (
+                <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">{saveError}</p>
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="flex justify-end space-x-3 mt-6">
@@ -287,10 +561,11 @@ export default function ProfilePage() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => router.push('/')}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  onClick={handleSave}
+                  disabled={!hasUnsavedChanges || !user.nickname?.trim() || isSaving}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
                 >
-                  Save Changes
+                  {isSaving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
@@ -342,4 +617,3 @@ export default function ProfilePage() {
     </div>
   );
 }
-

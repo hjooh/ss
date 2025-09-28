@@ -57,11 +57,12 @@ export const authService = {
         .single()
 
       if (profileError) {
+        console.error('Profile creation error:', profileError);
         // Note: Admin functions don't work with anon key
         // Supabase will handle cleanup of unused auth users automatically
         return {
           user: null,
-          error: 'Username may already be taken. Please try a different one.'
+          error: `Profile creation failed: ${profileError.message}`
         }
       }
 
@@ -85,7 +86,7 @@ export const authService = {
   },
 
   // Sign in with username and password using Supabase Auth
-  async signIn(username: string, password: string): Promise<AuthResponse> {
+  async signIn(username: string, password: string, rememberMe: boolean = true): Promise<AuthResponse> {
     try {
       // Convert username to email format for Supabase Auth
       const tempEmail = `${username}@padmatch.internal`
@@ -128,6 +129,23 @@ export const authService = {
         .from('user_profiles')
         .update({ updated_at: new Date().toISOString() })
         .eq('id', profileData.id)
+
+      // Handle remember me functionality
+      if (!rememberMe) {
+        // Store a flag to indicate this session should not persist
+        try {
+          localStorage.setItem('padmatch-remember-me', 'false');
+        } catch (e) {
+          console.warn('Could not set remember me flag:', e);
+        }
+      } else {
+        // Clear the flag if remember me is true
+        try {
+          localStorage.removeItem('padmatch-remember-me');
+        } catch (e) {
+          console.warn('Could not clear remember me flag:', e);
+        }
+      }
 
       return {
         user: {
@@ -192,9 +210,93 @@ export const authService = {
     }
   },
 
+  // Update user profile
+  async updateProfile(updates: { nickname?: string; username?: string }): Promise<AuthResponse> {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      
+      if (!authUser) {
+        return {
+          user: null,
+          error: 'No authenticated user'
+        }
+      }
+
+      // Check if username is being changed and if it already exists
+      if (updates.username) {
+        const { data: existingProfile } = await supabase
+          .from('user_profiles')
+          .select('username')
+          .eq('username', updates.username)
+          .neq('user_id', authUser.id)
+          .single()
+
+        if (existingProfile) {
+          return {
+            user: null,
+            error: 'Username already exists'
+          }
+        }
+      }
+
+      // Update the profile
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', authUser.id)
+        .select()
+        .single()
+
+      if (profileError) {
+        return {
+          user: null,
+          error: profileError.message
+        }
+      }
+
+      return {
+        user: {
+          id: profileData.id,
+          user_id: profileData.user_id,
+          username: profileData.username,
+          nickname: profileData.nickname,
+          created_at: profileData.created_at,
+          updated_at: profileData.updated_at
+        },
+        error: null
+      }
+    } catch (error) {
+      return {
+        user: null,
+        error: error instanceof Error ? error.message : 'An unknown error occurred'
+      }
+    }
+  },
+
+  // Check if remember me is enabled
+  isRememberMeEnabled(): boolean {
+    try {
+      const rememberMeFlag = localStorage.getItem('padmatch-remember-me');
+      return rememberMeFlag !== 'false';
+    } catch (e) {
+      console.warn('Could not check remember me flag:', e);
+      return true; // Default to enabled if we can't check
+    }
+  },
+
   // Sign out
   async signOut(): Promise<{ error: string | null }> {
     try {
+      // Clear remember me flag
+      try {
+        localStorage.removeItem('padmatch-remember-me');
+      } catch (e) {
+        console.warn('Could not clear remember me flag:', e);
+      }
+
       const { error } = await supabase.auth.signOut()
       return { error: error?.message || null }
     } catch (error) {

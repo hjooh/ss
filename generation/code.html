@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+<link as="style" href="https://fonts.googleapis.com/css2?display=swap&amp;family=Work+Sans:wght@400;500;700;900" onload="this.rel='stylesheet'" rel="stylesheet"/>
+<title>SwipePad - New Session</title>
+<link href="data:image/x-icon;base64," rel="icon" type="image/x-icon"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#3fd411",
+              "background-light": "#f6f8f6",
+              "background-dark": "#142210",
+            },
+            fontFamily: {
+              display: ["Work Sans"],
+            },
+            borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+          },
+        },
+      };
+    </script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display">
+<div class="relative flex min-h-screen w-full flex-col overflow-x-hidden">
+<header class="sticky top-0 z-10 w-full bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm">
+<div class="container mx-auto flex items-center justify-between whitespace-nowrap px-4 py-3">
+<div class="flex items-center gap-3 text-black dark:text-white">
+<svg class="h-8 w-8 text-primary" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M42.4379 44C42.4379 44 36.0744 33.9038 41.1692 24C46.8624 12.9336 42.2078 4 42.2078 4L7.01134 4C7.01134 4 11.6577 12.932 5.96912 23.9969C0.876273 33.9029 7.27094 44 7.27094 44L42.4379 44Z" fill="currentColor"></path>
+</svg>
+<h2 class="text-xl font-bold">SwipePad</h2>
+</div>
+<div class="flex items-center gap-4">
+<nav class="hidden md:flex items-center gap-6 text-sm font-medium text-black/70 dark:text-white/70">
+<a class="hover:text-black dark:hover:text-white transition-colors" href="#">Home</a>
+<a class="hover:text-black dark:hover:text-white transition-colors" href="#">About</a>
+<a class="hover:text-black dark:hover:text-white transition-colors" href="#">Contact</a>
+</nav>
+<button class="flex h-10 w-10 cursor-pointer items-center justify-center rounded-full bg-background-light dark:bg-background-dark text-black/70 dark:text-white/70 hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+<span class="material-symbols-outlined">help</span>
+</button>
+<div class="h-10 w-10 rounded-full bg-cover bg-center bg-no-repeat" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDWgS5CL4PIad5QBA5swN55t_oZFaenu5qw_v2RR77UykqXJhlbEtStBiGKZ5j1Owt8pvWThFfoni9-Act15sIjHhL8tltqq2kPSaDEg4wlzrgXsk5dtajTHSE5pPeZSu0M_zFpZCkrbAeGUKG3dfwpdo4KonF1xaB3IutbEY-EfwUMhBtKxGrkxB4ETwfw11Q8ECgN0fmhjDXT4nViefEFfu_1tTwua25GrR2dwvej_7_NpOyc0M6TxIXzA3gtAD4MSYfqaPyzFAA");'></div>
+</div>
+</div>
+</header>
+<main class="flex-grow">
+<div class="container mx-auto px-4 py-8">
+<div class="relative mb-8 h-80 w-full overflow-hidden rounded-xl">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBJbdFTlpRswvwiXaMWEhmrB6cgcDAEWNvw9_00PpuxdcCF-Bdv2z4V0_fB5PJm64TbJaKPbhYwBkQHEIj_av9pHUAZuVlK-n4m9MrGRudoMWvAk2KkjLEEcGb3TTOo9_6hc0CmUNhkaNfyA_k1pormFQzdSBl6-qvlzOqC7egQ3w-Hh3V0xRjYUd6APivGZvwG1DOHipW8uD32EA_idqv6AQK6CnupZoylql0U36KyjAlZRYeiapbGPLPPDoQnscENU_gtWyrFwHQ");'></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background-dark/70 to-transparent"></div>
+<div class="absolute bottom-0 left-0 p-8 text-white">
+<h1 class="text-4xl font-bold">New Session</h1>
+<p class="text-white/80">Share this code with your roommates: <span class="font-semibold text-white">789012</span></p>
+</div>
+<button class="absolute top-4 right-4 flex h-10 cursor-pointer items-center justify-center rounded-lg bg-white/20 px-4 text-sm font-bold text-white backdrop-blur-sm transition-colors hover:bg-white/30">Leave Session</button>
+</div>
+<div class="mb-12">
+<button class="h-14 w-full cursor-pointer rounded-lg bg-primary px-5 text-lg font-bold text-background-dark transition-transform hover:scale-105">Start Swiping</button>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+<div class="lg:col-span-2">
+<h2 class="mb-4 text-2xl font-bold text-black dark:text-white">Roommates Joined</h2>
+<div class="rounded-lg bg-white/5 dark:bg-white/5 shadow-sm p-6">
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6 text-center">
+<div class="flex flex-col items-center gap-2">
+<div class="relative">
+<div class="h-20 w-20 rounded-full bg-cover bg-center bg-no-repeat" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDWgS5CL4PIad5QBA5swN55t_oZFaenu5qw_v2RR77UykqXJhlbEtStBiGKZ5j1Owt8pvWThFfoni9-Act15sIjHhL8tltqq2kPSaDEg4wlzrgXsk5dtajTHSE5pPeZSu0M_zFpZCkrbAeGUKG3dfwpdo4KonF1xaB3IutbEY-EfwUMhBtKxGrkxB4ETwfw11Q8ECgN0fmhjDXT4nViefEFfu_1tTwua25GrR2dwvej_7_NpOyc0M6TxIXzA3gtAD4MSYfqaPyzFAA");'></div>
+<div class="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-background-dark">
+<span class="material-symbols-outlined text-base">verified</span>
+</div>
+</div>
+<p class="font-semibold text-black dark:text-white">Sarah (You)</p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-20 w-20 rounded-full bg-cover bg-center bg-no-repeat" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuApQKO4xXC56Y3TexL464BUgM3KB15f9o7vByunIbU8bwppcsXXtYmMxQ71jfXP75ZZbq1xzGJcRgR5TR9pYHwFAXBngBLT5_PCm8KIC3Ez2qUwi93l9ElHt06AP7betY3i99KWIGy6gYnYsX1Zf8VM7fak1AzdD1w5WXxjm9lwqK_UFLW0-WzU2A0hBXAYauHgQ5hn0npdCepN7_cz7CEnNRozV5yaHWC6gzUtYhe6-51FJcCCc4flCETLhCdlKAkaOLP1v8qRGqw");'></div>
+<p class="font-semibold text-black dark:text-white">Alex</p>
+</div>
+<div class="flex flex-col items-center gap-2">
+<div class="h-20 w-20 rounded-full bg-cover bg-center bg-no-repeat" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuApQKO4xXC56Y3TexL464BUgM3KB15f9o7vByunIbU8bwppcsXXtYmMxQ71jfXP75ZZbq1xzGJcRgR5TR9pYHwFAXBngBLT5_PCm8KIC3Ez2qUwi93l9ElHt06AP7betY3i99KWIGy6gYnYsX1Zf8VM7fak1AzdD1w5WXxjm9lwqK_UFLW0-WzU2A0hBXAYauHgQ5hn0npdCepN7_cz7CEnNRozV5yaHWC6gzUtYhe6-51FJcCCc4flCETLhCdlKAkaOLP1v8qRGqw");'></div>
+<p class="font-semibold text-black dark:text-white">Mark</p>
+</div>
+<div class="flex flex-col items-center justify-center gap-2 text-black/50 dark:text-white/50">
+<div class="flex h-20 w-20 items-center justify-center rounded-full border-2 border-dashed border-black/20 dark:border-white/20">
+<span class="material-symbols-outlined text-4xl">person_add</span>
+</div>
+<p class="text-sm">Waiting...</p>
+</div>
+</div>
+</div>
+</div>
+<div>
+<h2 class="mb-4 text-2xl font-bold text-black dark:text-white">Session Settings</h2>
+<div class="divide-y divide-black/10 rounded-lg bg-background-light dark:divide-white/10 dark:bg-background-dark shadow-sm">
+<a class="group flex items-center justify-between p-4 transition-colors hover:bg-black/5 dark:hover:bg-white/5" href="#">
+<div class="flex items-center gap-4">
+<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-black/5 text-black/60 dark:bg-white/5 dark:text-white/60">
+<span class="material-symbols-outlined">group_add</span>
+</div>
+<p class="font-medium text-black dark:text-white">Invite Roommates</p>
+</div>
+<span class="material-symbols-outlined text-black/50 transition-transform group-hover:translate-x-1 dark:text-white/50">chevron_right</span>
+</a>
+<a class="group flex items-center justify-between p-4 transition-colors hover:bg-black/5 dark:hover:bg-white/5" href="#">
+<div class="flex items-center gap-4">
+<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-black/5 text-black/60 dark:bg-white/5 dark:text-white/60">
+<span class="material-symbols-outlined">tune</span>
+</div>
+<p class="font-medium text-black dark:text-white">Swipe Preferences</p>
+</div>
+<span class="material-symbols-outlined text-black/50 transition-transform group-hover:translate-x-1 dark:text-white/50">chevron_right</span>
+</a>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+
+</body></html>
