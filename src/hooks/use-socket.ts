@@ -43,7 +43,11 @@ export const useSocket = () => {
   useEffect(() => {
     // Initialize socket connection
     const socket = io(process.env.NODE_ENV === 'production' ? undefined : 'http://localhost:3000', {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000
     });
 
     socketRef.current = socket;
@@ -271,22 +275,50 @@ export const useSocket = () => {
   const createSession = (nickname: string) => {
     if (!socketRef.current) {
       console.error('Socket not connected');
+      setError('Socket not connected. Please refresh the page.');
+      return;
+    }
+    
+    if (!isConnected) {
+      console.error('Socket not connected yet');
+      setError('Connecting to server... Please wait a moment and try again.');
       return;
     }
     
     console.log('Creating session for:', nickname);
-    socketRef.current.emit('create-session', { nickname });
+    console.log('Socket ID:', socketRef.current.id);
+    console.log('Socket connected:', socketRef.current.connected);
+    
+    try {
+      socketRef.current.emit('create-session', { nickname });
+    } catch (error) {
+      console.error('Error emitting create-session:', error);
+      setError('Failed to create session. Please try again.');
+    }
   };
 
   const joinSession = (code: string, nickname: string) => {
     if (!socketRef.current) {
       console.error('Socket not connected');
+      setError('Socket not connected. Please refresh the page.');
+      return;
+    }
+    
+    if (!isConnected) {
+      console.error('Socket not connected yet');
+      setError('Connecting to server... Please wait a moment and try again.');
       return;
     }
     
     console.log('🔗 Attempting to join session:', { code, nickname, socketId: socketRef.current.id });
     try { localStorage.setItem('padmatch-room-code', code); } catch {}
-    socketRef.current.emit('join-session', { code, nickname });
+    
+    try {
+      socketRef.current.emit('join-session', { code, nickname });
+    } catch (error) {
+      console.error('Error emitting join-session:', error);
+      setError('Failed to join session. Please try again.');
+    }
   };
 
   const voteApartment = (apartmentId: string) => {

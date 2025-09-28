@@ -203,6 +203,13 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
                 />
             </div>
 
+            {/* Connection Status */}
+            {!isConnected && (
+              <div className="text-center text-sm text-amber-600 bg-amber-50 p-2 rounded-lg">
+                Connecting to server...
+              </div>
+            )}
+
             {/* Action Button */}
             <Button
               onClick={(e) => {
@@ -219,12 +226,14 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
                 (isCreateMode ? isCreating : isJoining) ||
                 !isConnected
               }
-              className="w-full bg-black hover:bg-gray-800 text-white"
+              className="w-full bg-black hover:bg-gray-800 text-white disabled:bg-gray-400"
               size="lg"
             >
-              {isCreateMode 
-                ? (isCreating ? 'Creating...' : 'Create New Hunt Session')
-                : (isJoining ? 'Joining...' : 'Join Session')
+              {!isConnected 
+                ? 'Connecting...'
+                : isCreateMode 
+                  ? (isCreating ? 'Creating...' : 'Create New Hunt Session')
+                  : (isJoining ? 'Joining...' : 'Join Session')
               }
             </Button>
             </CardContent>
@@ -233,59 +242,6 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
         </div>
       </div>
 
-      {/* Scrollable Content Section */}
-      <div className="bg-white py-16 px-8">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">AI-Powered Apartment Insights</h2>
-          
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Insight Card 1 */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Smart Matching Algorithm</h3>
-              <p className="text-gray-600">
-                Our AI analyzes your preferences, budget, and lifestyle to find apartments that truly match your needs. 
-                No more endless scrolling through irrelevant listings.
-              </p>
-            </div>
-
-            {/* Insight Card 2 */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Real-time Market Analysis</h3>
-              <p className="text-gray-600">
-                Get instant insights on neighborhood trends, price predictions, and market conditions to make 
-                informed decisions about your next home.
-              </p>
-            </div>
-
-            {/* Insight Card 3 */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Collaborative Decision Making</h3>
-              <p className="text-gray-600">
-                Work together with roommates or partners using our shared decision tools. Compare preferences, 
-                vote on options, and find the perfect compromise.
-              </p>
-            </div>
-
-            {/* Insight Card 4 */}
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-xl font-semibold text-gray-900 mb-3">Personalized Recommendations</h3>
-              <p className="text-gray-600">
-                Learn from your browsing patterns and feedback to receive increasingly accurate apartment 
-                suggestions tailored specifically to your taste and requirements.
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-12 text-center">
-            <p className="text-lg text-gray-600 mb-4">
-              Ready to revolutionize your apartment hunting experience?
-            </p>
-            <p className="text-sm text-gray-500">
-              Join thousands of users who have found their perfect home with SuiteSync's AI-powered platform.
-            </p>
-          </div>
-        </div>
-      </div>
       
       {/* Error Dropdown Notification */}
       <ErrorDropdown
