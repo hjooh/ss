@@ -213,13 +213,13 @@ export const useSocket = () => {
     });
 
     // AI Generation events
-    socket.on('ai-generating-apartments', ({ message, roomCode }: { message: string; roomCode: string }) => {
+    socket.on('ai-generating-apartments', ({ message }: { message: string; roomCode: string }) => {
       console.log('🤖 AI generating apartments:', message);
       setIsAIGenerating(true);
       setAiMessage(message);
     });
 
-    socket.on('ai-generation-complete', ({ message, roomCode }: { message: string; roomCode: string }) => {
+    socket.on('ai-generation-complete', ({ message }: { message: string; roomCode: string }) => {
       console.log('✅ AI generation complete:', message);
       setIsAIGenerating(false);
       setAiMessage(message);
@@ -230,7 +230,7 @@ export const useSocket = () => {
       }, 3000);
     });
 
-    socket.on('ai-generation-error', ({ message, roomCode }: { message: string; roomCode: string }) => {
+    socket.on('ai-generation-error', ({ message }: { message: string; roomCode: string }) => {
       console.log('❌ AI generation error:', message);
       setIsAIGenerating(false);
       setAiMessage(message);
@@ -270,7 +270,7 @@ export const useSocket = () => {
     return () => {
       socket.disconnect();
     };
-  }, []);
+  }, [sessionState.session?.code]);
 
   const createSession = (nickname: string) => {
     if (!socketRef.current) {

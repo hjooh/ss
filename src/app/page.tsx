@@ -294,7 +294,6 @@ export default function Home() {
         <SessionSetup 
           onSessionJoined={handleSessionJoined} 
           socketHook={socketHook}
-          onLogout={handleLogout}
           currentUser={currentUser}
         />
       )}

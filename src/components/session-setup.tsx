@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useSocket } from '@/hooks/use-socket';
 import { UserProfile } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ErrorDropdown } from '@/components/ui/error-dropdown';
 // Removed Input import - using regular HTML input
 import { Plus, Users } from 'lucide-react';
@@ -13,11 +13,10 @@ import { Plus, Users } from 'lucide-react';
 interface SessionSetupProps {
   onSessionJoined: () => void;
   socketHook: ReturnType<typeof useSocket>;
-  onLogout?: () => void;
   currentUser: UserProfile | null;
 }
 
-export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUser }: SessionSetupProps) => {
+export const SessionSetup = ({ onSessionJoined, socketHook, currentUser }: SessionSetupProps) => {
   const [sessionCode, setSessionCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
@@ -88,7 +87,7 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
       }
       onSessionJoined?.();
     }, 200);
-  }, [socketHook.sessionState.session?.code]);
+  }, [socketHook.sessionState.session?.code, onSessionJoined, router]);
   
   // Cleanup timeout on unmount
   useEffect(() => {
