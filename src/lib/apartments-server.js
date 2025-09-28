@@ -18,135 +18,194 @@ if (!supabaseUrl || !supabaseServiceKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 /**
- * Fetch apartments from Supabase database (server-side)
+ * Parse price range string to get average price
+ */
+const parsePriceRange = (priceRange) => {
+  if (!priceRange) return 1000; // Default price
+  
+  // Extract numbers from price range (e.g., "$800-$1200" -> 1000)
+  const numbers = priceRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  
+  return 1000; // Default
+};
+
+/**
+ * Parse bedroom range string to get average bedrooms
+ */
+const parseBedroomRange = (bedroomRange) => {
+  if (!bedroomRange) return 2; // Default bedrooms
+  
+  // Extract numbers from bedroom range (e.g., "1-3" -> 2)
+  const numbers = bedroomRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  
+  return 2; // Default
+};
+
+/**
+ * Parse bathroom range string to get average bathrooms
+ */
+const parseBathroomRange = (bathroomRange) => {
+  if (!bathroomRange) return 1; // Default bathrooms
+  
+  // Extract numbers from bathroom range (e.g., "1-2" -> 1.5 -> 2)
+  const numbers = bathroomRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  
+  return 1; // Default
+};
+
+/**
+ * Fetch apartments from Supabase complex table (server-side)
  */
 const fetchApartmentsServer = async () => {
   try {
-    console.log('🔍 Server: Fetching apartments from Supabase...');
+    console.log('🔍 Server: Fetching apartment complexes from Supabase...');
     console.log('Supabase URL:', supabaseUrl);
     
     const { data, error } = await supabase
-      .from('apartments')
+      .from('complex')
       .select('*');
 
     console.log('📊 Server: Supabase response:', { dataLength: data?.length, error });
 
     if (error) {
-      console.error('❌ Server: Error fetching apartments:', error);
+      console.error('❌ Server: Error fetching apartment complexes:', error);
       throw error;
     }
 
     if (!data || data.length === 0) {
-      console.warn('⚠️ Server: No apartments found in database');
+      console.warn('⚠️ Server: No apartment complexes found in database');
       return [];
     }
 
-    console.log(`✅ Server: Found ${data.length} apartments in database`);
+    console.log(`✅ Server: Found ${data.length} apartment complexes in database`);
 
-    // Map Supabase data to our Apartment interface
-    const apartments = data.map((apt) => ({
-      id: apt.id,
-      name: apt.address ? apt.address.split(',')[0] : `Apartment ${apt.id}`,
-      address: apt.address || 'Address not available',
-      rent: apt.price || 0,
-      bedrooms: apt.bedrooms || 0,
-      bathrooms: apt.bathrooms || 0,
-      sqft: apt.square_feet || 0,
+    // Map Supabase complex data to our Apartment interface
+    const apartments = data.map((complex) => ({
+      id: complex.id || `complex-${Math.random().toString(36).substr(2, 9)}`,
+      name: complex.name || 'Apartment Complex',
+      address: complex.address || 'Address not available',
+      rent: parsePriceRange(complex['price range']),
+      bedrooms: parseBedroomRange(complex['bedroom range']),
+      bathrooms: parseBathroomRange(complex['bathroom range']),
+      sqft: 1000, // Default since not specified in database
       photos: [
         'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop&auto=format&q=80',
         'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop&auto=format&q=80'
       ],
-      pros: generatePros(apt),
-      cons: generateCons(apt),
-      description: generateDescription(apt)
+      pros: generatePros(complex),
+      cons: generateCons(complex),
+      description: generateDescription(complex)
     }));
 
-    console.log(`✅ Server: Successfully mapped ${apartments.length} apartments`);
+    console.log(`✅ Server: Successfully mapped ${apartments.length} apartment complexes`);
     return apartments;
   } catch (error) {
-    console.error('❌ Server: Failed to fetch apartments:', error);
+    console.error('❌ Server: Failed to fetch apartment complexes:', error);
     return [];
   }
 };
 
 /**
- * Generate pros based on apartment data
+ * Generate pros based on complex data
  */
-const generatePros = (apt) => {
+const generatePros = (complex) => {
   const pros = [];
   
-  // Parse walking time (e.g., "32 min" -> 32)
-  const walkingTime = parseInt(apt.walking_time_to_vt?.replace(/\D/g, '') || '0');
-  const drivingTime = parseInt(apt.driving_time_to_vt?.replace(/\D/g, '') || '0');
-  
-  if (walkingTime && walkingTime <= 10) {
-    pros.push(`✓ ${apt.walking_time_to_vt} walk to Virginia Tech campus`);
-  } else if (drivingTime && drivingTime <= 5) {
-    pros.push(`✓ ${apt.driving_time_to_vt} drive to Virginia Tech campus`);
+  // Add star rating as a pro if high
+  if (complex.stars && complex.stars >= 4) {
+    pros.push(`✓ High rating (${complex.stars}/5 stars)`);
   }
   
-  if (apt.star_rating && apt.star_rating >= 4) {
-    pros.push(`✓ High rating (${apt.star_rating}/5 stars)`);
+  // Add reviews as a pro if available
+  if (complex.reviews && complex.reviews > 0) {
+    pros.push(`✓ ${complex.reviews} reviews available`);
   }
   
-  if (apt.amenities && Array.isArray(apt.amenities)) {
-    apt.amenities.slice(0, 2).forEach(amenity => {
-      pros.push(`✓ ${amenity}`);
-    });
+  // Add price range as a pro if affordable
+  const price = parsePriceRange(complex['price range']);
+  if (price && price <= 2000) {
+    pros.push(`✓ Affordable rent ($${price})`);
   }
   
-  if (apt.per_person_price && apt.per_person_price <= 500) {
-    pros.push(`✓ Affordable per-person cost ($${apt.per_person_price})`);
+  // Add bedroom range as a pro
+  if (complex['bedroom range']) {
+    pros.push(`✓ ${complex['bedroom range']} bedroom options`);
   }
   
   return pros;
 };
 
 /**
- * Generate cons based on apartment data
+ * Generate cons based on complex data
  */
-const generateCons = (apt) => {
+const generateCons = (complex) => {
   const cons = [];
   
-  // Parse walking time (e.g., "32 min" -> 32)
-  const walkingTime = parseInt(apt.walking_time_to_vt?.replace(/\D/g, '') || '0');
-  
-  if (walkingTime && walkingTime > 15) {
-    cons.push(`✗ ${apt.walking_time_to_vt} walk to campus`);
+  // Add star rating as a con if low
+  if (complex.stars && complex.stars < 3) {
+    cons.push(`✗ Lower rating (${complex.stars}/5 stars)`);
   }
   
-  if (apt.star_rating && apt.star_rating < 3) {
-    cons.push(`✗ Lower rating (${apt.star_rating}/5 stars)`);
+  // Add price as a con if expensive
+  const price = parsePriceRange(complex['price range']);
+  if (price && price > 2500) {
+    cons.push(`✗ Higher rent ($${price})`);
   }
   
-  if (apt.per_person_price && apt.per_person_price > 800) {
-    cons.push(`✗ Higher per-person cost ($${apt.per_person_price})`);
+  // Add reviews as a con if few reviews
+  if (complex.reviews && complex.reviews < 5) {
+    cons.push(`✗ Limited reviews (${complex.reviews})`);
   }
   
-  if (apt.square_feet && apt.square_feet < 800) {
-    cons.push(`✗ Smaller space (${apt.square_feet} sq ft)`);
+  // Add generic cons if no specific data
+  if (cons.length === 0) {
+    cons.push(`✗ Limited information available`);
   }
   
   return cons;
 };
 
 /**
- * Generate description based on apartment data
+ * Generate description based on complex data
  */
-const generateDescription = (apt) => {
-  let description = `${apt.bedrooms || 0}-bedroom, ${apt.bathrooms || 0}-bathroom apartment`;
+const generateDescription = (complex) => {
+  let description = `${complex.name} apartment complex`;
   
-  if (apt.culture_community_vibe) {
-    description += ` with a ${apt.culture_community_vibe.toLowerCase()} vibe`;
+  if (complex['bedroom range']) {
+    description += ` offering ${complex['bedroom range']} bedroom options`;
   }
   
-  if (apt.user_reviews_summary) {
-    description += `. ${apt.user_reviews_summary}`;
+  if (complex['price range']) {
+    description += ` with rent ranging from ${complex['price range']}`;
   }
   
-  if (apt.amenities && Array.isArray(apt.amenities)) {
-    const topAmenities = apt.amenities.slice(0, 2);
-    description += ` Features include ${topAmenities.join(' and ')}.`;
+  if (complex.stars) {
+    description += ` (${complex.stars}/5 star rating)`;
+  }
+  
+  if (complex.reviews) {
+    description += ` with ${complex.reviews} reviews`;
   }
   
   return description;

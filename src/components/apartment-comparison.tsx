@@ -295,10 +295,22 @@ export const ApartmentComparison = ({
           </div>
 
           {/* Property Details */}
-          <div className="flex space-x-4 mb-4 text-sm text-gray-600">
-            <span>{apartment.bedrooms} bed</span>
-            <span>{apartment.bathrooms} bath</span>
-            <span>{apartment.sqft} sqft</span>
+          <div className="flex flex-wrap gap-2 mb-4 text-sm">
+            <span className="text-gray-600">{apartment.bedrooms} bed</span>
+            <span className="text-gray-600">{apartment.bathrooms} bath</span>
+            <span className="text-gray-600">{apartment.sqft} sqft</span>
+            
+            {/* VT-specific info badges */}
+            {apartment.distanceToVTCampus && (
+              <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs">
+                📍 {apartment.distanceToVTCampus}mi to VT
+              </span>
+            )}
+            {apartment.btAccess && (
+              <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                🚌 BT Bus
+              </span>
+            )}
           </div>
 
           {/* Vote Counter */}

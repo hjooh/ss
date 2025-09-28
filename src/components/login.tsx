@@ -69,7 +69,7 @@ export const Login = ({ onLogin, onSignup }: LoginProps) => {
             <User className="h-8 w-8 text-white" />
           </div>
           
-          <CardTitle className="text-3xl font-bold">PadMatch</CardTitle>
+          <CardTitle className="text-3xl font-bold">SuiteSync</CardTitle>
           <CardDescription className="text-lg">
             {isSignupMode ? `Sign up` : `Sign in`}
           </CardDescription>

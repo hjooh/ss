@@ -22,6 +22,7 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [showErrorDropdown, setShowErrorDropdown] = useState(false);
+  const [isCreateMode, setIsCreateMode] = useState(true);
   const { createSession, joinSession, isConnected, error, clearError } = socketHook;
   const router = useRouter();
 
@@ -68,13 +69,6 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
     }
   }, [error]);
 
-  // Prevent body scrolling
-  useEffect(() => {
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = 'unset';
-    };
-  }, []);
 
   useEffect(() => {
     const code = socketHook.sessionState.session?.code;
@@ -106,61 +100,96 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
   }, []);
 
   return (
-    <div className="h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-start justify-center pt-16 p-2 overflow-hidden">
-      <div className="w-full max-w-4xl">
-        {/* Welcome Header */}
-        <div className="text-center mb-2">
-          <h1 className="text-5xl font-bold text-gray-900">Welcome to PadMatch!</h1>
-          <p className="text-base text-gray-600">Find your perfect apartment together</p>
+    <div className="min-h-screen">
+      {/* Hero Section */}
+      <div className="h-[75vh] bg-cover bg-center bg-no-repeat flex items-center justify-between p-2" style={{backgroundImage: 'url(/hero-page.png)'}}>
+        {/* Welcome Header - Left Side */}
+        <div className="w-full max-w-md ml-55 -mt-30">
+          <div className="text-left">
+            <h1 className="text-5xl font-bold text-white drop-shadow-lg">Welcome to SuiteSync!</h1>
+            <p className="text-base text-white drop-shadow-md">Find your perfect apartment together</p>
+          </div>
         </div>
-        {/* Two Cards Layout */}
-        <div className="grid md:grid-cols-2 gap-3 max-w-4xl mx-auto">
-          {/* Create Room Card */}
-          <Card className="p-3 border-0 rounded-none shadow-none">
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto mb-2 w-10 h-10 bg-black rounded-full flex items-center justify-center">
-                <Plus className="h-5 w-5 text-white" />
-              </div>
-              <CardTitle className="text-2xl font-bold text-gray-900">Create Room</CardTitle>
-              <CardDescription className="text-gray-600">
-                Start a new apartment hunting session
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="text-center">
-              <Button
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleCreateSession();
-                }}
-                disabled={!currentUser?.nickname || isCreating || !isConnected}
-                className="w-full bg-black hover:bg-gray-800 text-white"
-                size="lg"
-              >
-                {isCreating ? 'Creating...' : 'Create New Hunt Session'}
-              </Button>
-            </CardContent>
-          </Card>
 
-          {/* Join Room Card */}
-          <Card className="p-3 border-0 rounded-none shadow-none">
-            <CardHeader className="text-center pb-2">
-              <div className="mx-auto mb-2 w-10 h-10 bg-black rounded-full flex items-center justify-center">
-                <Users className="h-5 w-5 text-white" />
+        {/* Form Card - Right Side */}
+        <div className="w-full max-w-md mr-16">
+          <Card className="p-0 border-0 rounded-lg shadow-lg overflow-hidden bg-white">
+          {/* Mode Toggle at Top */}
+          <div className="flex bg-gray-100 p-1">
+            <button
+              onClick={() => {
+                setIsCreateMode(true);
+                setSessionCode('');
+                clearError();
+                setShowErrorDropdown(false);
+              }}
+              className={`flex-1 py-3 px-4 rounded-md text-sm font-medium transition-all duration-300 ease-in-out ${
+                isCreateMode
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Create
+            </button>
+            <button
+              onClick={() => {
+                setIsCreateMode(false);
+                clearError();
+                setShowErrorDropdown(false);
+              }}
+              className={`flex-1 py-3 px-4 rounded-md text-sm font-medium transition-all duration-300 ease-in-out ${
+                !isCreateMode
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Join
+            </button>
+          </div>
+
+          <div className="p-6">
+            <CardHeader className="text-center pb-4">
+              <div className="mx-auto mb-4 w-12 h-12 bg-black rounded-full flex items-center justify-center transition-all duration-300 ease-in-out">
+                <div className={`transition-all duration-300 ease-in-out ${isCreateMode ? 'opacity-100 scale-100' : 'opacity-0 scale-75 absolute'}`}>
+                  <Plus className="h-6 w-6 text-white" />
+                </div>
+                <div className={`transition-all duration-300 ease-in-out ${!isCreateMode ? 'opacity-100 scale-100' : 'opacity-0 scale-75 absolute'}`}>
+                  <Users className="h-6 w-6 text-white" />
+                </div>
               </div>
-              <CardTitle className="text-2xl font-bold text-gray-900">Join Room</CardTitle>
-              <CardDescription className="text-gray-600">
-                Enter a session code to join an existing hunt
-              </CardDescription>
+              <CardTitle className="text-2xl font-bold text-gray-900 transition-all duration-300 ease-in-out">
+                <div className={`transition-all duration-300 ease-in-out ${isCreateMode ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 absolute'}`}>
+                  Create Room
+                </div>
+                <div className={`transition-all duration-300 ease-in-out ${!isCreateMode ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 absolute'}`}>
+                  Join Room
+                </div>
+              </CardTitle>
+              <div className="text-sm text-gray-600 transition-all duration-300 ease-in-out min-h-[1.5rem]">
+                <span className={`transition-all duration-300 ease-in-out ${isCreateMode ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 absolute'}`}>
+                  Start a new apartment hunting session
+                </span>
+                <span className={`transition-all duration-300 ease-in-out ${!isCreateMode ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 absolute'}`}>
+                  Enter a session code to join an existing hunt
+                </span>
+              </div>
             </CardHeader>
-            <CardContent className="text-center">
-              <div className="flex justify-between">
+
+            <CardContent className="space-y-4">
+
+            {/* Session Code Input (only show in join mode) */}
+            <div className={`transition-all duration-300 ease-in-out overflow-hidden ${
+              !isCreateMode 
+                ? 'max-h-20 opacity-100 translate-y-0' 
+                : 'max-h-0 opacity-0 -translate-y-2'
+            }`}>
                 <input
                   type="text"
                   value={sessionCode}
                   onChange={(e) => {
                     setSessionCode(e.target.value.toUpperCase());
-                    clearError(); // Clear error when typing
-                    setShowErrorDropdown(false); // Hide error dropdown when typing
+                  clearError();
+                  setShowErrorDropdown(false);
                   }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && sessionCode.length >= 6) {
@@ -169,23 +198,92 @@ export const SessionSetup = ({ onSessionJoined, socketHook, onLogout, currentUse
                     }
                   }}
                   placeholder="Enter session code"
-                  className="px-10 rounded-lg text-black text-center bg-white focus:outline-none"
+                className="w-full px-4 py-3 rounded-lg text-black text-center bg-white border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all duration-300 ease-in-out"
                   maxLength={10}
                 />
-                <Button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    handleJoinSession();
-                  }}
-                  disabled={!currentUser?.nickname || sessionCode.length < 6 || isJoining || !isConnected}
-                  className="px-6 bg-black hover:bg-gray-800 text-white"
-                  size="lg"
-                >
-                  {isJoining ? 'Joining...' : 'Join'}
-                </Button>
-              </div>
+            </div>
+
+            {/* Action Button */}
+            <Button
+              onClick={(e) => {
+                e.preventDefault();
+                if (isCreateMode) {
+                  handleCreateSession();
+                } else {
+                  handleJoinSession();
+                }
+              }}
+              disabled={
+                !currentUser?.nickname || 
+                (!isCreateMode && sessionCode.length < 6) ||
+                (isCreateMode ? isCreating : isJoining) ||
+                !isConnected
+              }
+              className="w-full bg-black hover:bg-gray-800 text-white"
+              size="lg"
+            >
+              {isCreateMode 
+                ? (isCreating ? 'Creating...' : 'Create New Hunt Session')
+                : (isJoining ? 'Joining...' : 'Join Session')
+              }
+            </Button>
             </CardContent>
+          </div>
           </Card>
+        </div>
+      </div>
+
+      {/* Scrollable Content Section */}
+      <div className="bg-white py-16 px-8">
+        <div className="max-w-4xl mx-auto">
+          <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">AI-Powered Apartment Insights</h2>
+          
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Insight Card 1 */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Smart Matching Algorithm</h3>
+              <p className="text-gray-600">
+                Our AI analyzes your preferences, budget, and lifestyle to find apartments that truly match your needs. 
+                No more endless scrolling through irrelevant listings.
+              </p>
+            </div>
+
+            {/* Insight Card 2 */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Real-time Market Analysis</h3>
+              <p className="text-gray-600">
+                Get instant insights on neighborhood trends, price predictions, and market conditions to make 
+                informed decisions about your next home.
+              </p>
+            </div>
+
+            {/* Insight Card 3 */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Collaborative Decision Making</h3>
+              <p className="text-gray-600">
+                Work together with roommates or partners using our shared decision tools. Compare preferences, 
+                vote on options, and find the perfect compromise.
+              </p>
+            </div>
+
+            {/* Insight Card 4 */}
+            <div className="bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-900 mb-3">Personalized Recommendations</h3>
+              <p className="text-gray-600">
+                Learn from your browsing patterns and feedback to receive increasingly accurate apartment 
+                suggestions tailored specifically to your taste and requirements.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-12 text-center">
+            <p className="text-lg text-gray-600 mb-4">
+              Ready to revolutionize your apartment hunting experience?
+            </p>
+            <p className="text-sm text-gray-500">
+              Join thousands of users who have found their perfect home with SuiteSync's AI-powered platform.
+            </p>
+          </div>
         </div>
       </div>
       

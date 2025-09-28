@@ -7,6 +7,7 @@ import { authService } from '@/lib/auth';
 import { Navbar } from '@/components/navbar';
 import { generateUserAvatar } from '@/lib/avatar-generator';
 import { supabase } from '@/lib/supabase';
+import { Apartment } from '@/types';
 
 interface ProfilePageProps {
   currentUser?: AuthUserProfile | null;
@@ -16,21 +17,24 @@ interface ProfilePageProps {
 export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePageProps = {}) {
   const router = useRouter();
   const [user, setUser] = useState<AuthUserProfile | null>(currentUser || null);
-  const [profileData, setProfileData] = useState<any | null>(null); // New state to hold fetched data
-  const [favorites, setFavorites] = useState<any[]>([]);
+  const [profileData, setProfileData] = useState<any | null>(null);
+  const [apartments, setApartments] = useState<Apartment[]>([]);
+  const [filteredApartments, setFilteredApartments] = useState<Apartment[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoadingApartments, setIsLoadingApartments] = useState(false);
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<'search' | 'favorites'>('search');
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Form state for preferences (now synced with Supabase)
+  // Form state for preferences
   const [budgetMax, setBudgetMax] = useState(2000);
   const [beds, setBeds] = useState(1);
   const [baths, setBaths] = useState(1);
-  const [maxWalkTime, setMaxWalkTime] = useState(15); // minutes
-  const [maxDriveTime, setMaxDriveTime] = useState(20); // minutes
-  
-  // Tags state
+  const [maxWalkTime, setMaxWalkTime] = useState(15);
+  const [maxDriveTime, setMaxDriveTime] = useState(20);
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
 
   // Tags data
@@ -54,7 +58,7 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
     ]
   };
 
-  // --- STEP 1: A clean function to ONLY fetch data ---
+  // Fetch profile data from Supabase
   const fetchProfileData = useCallback(async (userId: string) => {
     setIsLoading(true);
     try {
@@ -66,18 +70,18 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
 
       if (error) {
         console.error('Error loading preferences:', error);
-        setProfileData(null); // Set to null on error
+        setProfileData(null);
       } else {
-        setProfileData(data); // Store the entire profile object
+        setProfileData(data);
       }
     } catch (err) {
-      console.error('Catastrophic error loading preferences:', err);
+      console.error('Error loading preferences:', err);
     } finally {
       setIsLoading(false);
     }
-  }, []); // Empty dependency array means this function is created once
+  }, []);
 
-  // --- STEP 2: useEffect to fetch data when the user changes ---
+  // Load user and profile data
   useEffect(() => {
     async function loadUserAndProfile() {
       let finalUser = currentUser;
@@ -89,38 +93,33 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
       if (finalUser) {
         setUser(finalUser);
         fetchProfileData(finalUser.user_id);
-    } else {
+      } else {
         router.push('/');
       }
     }
     loadUserAndProfile();
-    loadFavorites(); // This can stay as is
+    loadApartments();
   }, [currentUser, fetchProfileData, router]);
-
 
   // Helper function to safely parse array-like strings
   const parseArrayString = (value: any): string[] => {
-    // Return an empty array if the value is null, not a string, or empty
     if (!value || typeof value !== 'string') {
       return [];
     }
     try {
       const parsed = JSON.parse(value);
-      // Ensure the parsed result is actually an array
       return Array.isArray(parsed) ? parsed : [];
     } catch (e) {
-      // If JSON.parse fails, return an empty array
       console.error("Failed to parse array string:", value, e);
       return [];
     }
   };
 
-  // --- STEP 3: A SEPARATE useEffect to sync state FROM the fetched data ---
+  // Sync state from fetched data
   useEffect(() => {
     if (profileData) {
-      console.log('🔄 Syncing state from fetched profileData:', profileData);
+      console.log('🔄 Loading profile data');
       
-      // Use the helper function to parse the data
       const walkTimeArray = parseArrayString(profileData['Preferred Commute Time (Walk)']);
       const walkTime = parseInt(walkTimeArray[0]) || 15;
       const amenities = parseArrayString(profileData['Amenities']);
@@ -129,7 +128,7 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
       const idealApartment = parseArrayString(profileData['ideal_apartment']);
 
       setMaxWalkTime(walkTime);
-      setMaxDriveTime(20); // Default
+      setMaxDriveTime(20);
 
       // Extract budget from ideal apartment
       const budgetItem = idealApartment.find((item: string) => item.includes('Under $'));
@@ -149,25 +148,21 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
         }
       }
 
-      // Your tag logic remains the same, but it's now in a predictable place
+      // Map tags from database
       const newSelectedTags = new Set<string>();
       
-      // Map amenities from database to form tags
       amenities.forEach((amenity: string) => {
         newSelectedTags.add(amenity);
       });
 
-      // Map culture tags
       culture.forEach((cultureItem: string) => {
         newSelectedTags.add(cultureItem);
       });
 
-      // Map DEI tags
       dei.forEach((deiItem: string) => {
         newSelectedTags.add(deiItem);
       });
 
-      // Map ideal apartment tags
       idealApartment.forEach((item: string) => {
         if (item === 'Utilities Included') {
           newSelectedTags.add('Utilities Included');
@@ -178,18 +173,124 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
       });
 
       setSelectedTags(newSelectedTags);
-      console.log('✅ State sync complete. Tags set to:', Array.from(newSelectedTags));
+      
+      // Load favorites from profile data
+      let favoritesData = [];
+      if (profileData['favorites']) {
+        if (Array.isArray(profileData['favorites'])) {
+          // If it's already an array (from Supabase text[] column)
+          favoritesData = profileData['favorites'];
+        } else {
+          // If it's a JSON string, parse it
+          favoritesData = parseArrayString(profileData['favorites']);
+        }
+      }
+      setFavorites(favoritesData);
+      console.log('⭐ Favorites loaded:', favoritesData.length, 'items');
     }
-  }, [profileData]); // This effect runs ONLY when profileData changes
+  }, [profileData]);
 
-  const loadFavorites = () => {
+  const loadApartments = async () => {
+    setIsLoadingApartments(true);
     try {
-      const saved = localStorage.getItem('padmatch-favorites');
-      if (saved) {
-        setFavorites(JSON.parse(saved));
+      const response = await fetch('/api/apartments');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const apartmentData = await response.json();
+      console.log('📊 Apartments loaded:', apartmentData.length, 'total');
+      
+      // Check if any favorites match current apartments
+      const matchingFavorites = favorites.filter(favId => 
+        apartmentData.some((apt: Apartment) => apt.id === favId)
+      );
+      
+      const orphanedFavorites = favorites.filter(favId => 
+        !apartmentData.some((apt: Apartment) => apt.id === favId)
+      );
+      
+      // If there are orphaned favorites, clean them up
+      if (orphanedFavorites.length > 0) {
+        console.log('🧹 Cleaning up orphaned favorites...');
+        const cleanedFavorites = matchingFavorites;
+        setFavorites(cleanedFavorites);
+        
+        // Save the cleaned favorites to the database
+        if (user) {
+          supabase
+            .from('user_profiles')
+            .update({
+              favorites: cleanedFavorites,
+              updated_at: new Date().toISOString()
+            })
+            .eq('user_id', user.user_id)
+            .then(({ error }) => {
+              if (error) {
+                console.error('Error cleaning up favorites:', error);
+              } else {
+                console.log('✅ Orphaned favorites cleaned up successfully');
+              }
+            });
+        }
+      }
+      
+      setApartments(apartmentData);
+      setFilteredApartments(apartmentData);
+    } catch (error) {
+      console.error('Error loading apartments:', error);
+    } finally {
+      setIsLoadingApartments(false);
+    }
+  };
+
+  // Search function to filter apartments
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (!query.trim()) {
+      setFilteredApartments(apartments);
+      return;
+    }
+
+    const filtered = apartments.filter(apartment => 
+      apartment.name.toLowerCase().includes(query.toLowerCase()) ||
+      apartment.address.toLowerCase().includes(query.toLowerCase()) ||
+      apartment.description.toLowerCase().includes(query.toLowerCase())
+    );
+    setFilteredApartments(filtered);
+  };
+
+  // Toggle favorite status
+  const toggleFavorite = async (apartmentId: string) => {
+    if (!user) return;
+    
+    const newFavorites = favorites.includes(apartmentId)
+      ? favorites.filter(id => id !== apartmentId)
+      : [...favorites, apartmentId];
+    
+    console.log('⭐ Toggling favorite for:', apartmentId);
+    console.log('⭐ Current favorites:', favorites);
+    console.log('⭐ New favorites:', newFavorites);
+    
+    setFavorites(newFavorites);
+    
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          favorites: newFavorites,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.user_id);
+
+      if (error) {
+        console.error('Error updating favorites:', error);
+        setFavorites(favorites);
+      } else {
+        console.log('✅ Favorites saved successfully to database');
       }
     } catch (error) {
-      console.error('Error loading favorites:', error);
+      console.error('Error updating favorites:', error);
+      setFavorites(favorites);
     }
   };
 
@@ -214,16 +315,12 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
         setUser(updatedUser);
         setHasUnsavedChanges(false);
         
-        // Notify parent component of user update
         if (onUserUpdate) {
           onUserUpdate(updatedUser);
         }
         
-        // Save preferences to Supabase using array format
-        console.log('💾 Saving preferences with selected tags:', Array.from(selectedTags));
-        
+        // Save preferences to Supabase
         const amenities = [];
-        // Map all amenities from form tags to database values
         if (selectedTags.has('In-Unit Washer/Dryer')) amenities.push('In-Unit Washer/Dryer');
         if (selectedTags.has('Washer/Dryer Hookup')) amenities.push('Washer/Dryer Hookup');
         if (selectedTags.has('Dishwasher')) amenities.push('Dishwasher');
@@ -245,11 +342,8 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
         if (selectedTags.has('Smart Home Technology')) amenities.push('Smart Home Technology');
         if (selectedTags.has('Extra Storage')) amenities.push('Extra Storage');
         if (selectedTags.has('Office/Den Space')) amenities.push('Office/Den Space');
-        
-        console.log('🏠 Mapped amenities for database:', amenities);
 
         const culture = [];
-        // Map all culture tags
         if (selectedTags.has('Student-Focused')) culture.push('Student-Focused');
         if (selectedTags.has('Quiet Residential')) culture.push('Quiet Residential');
         if (selectedTags.has('Family-Friendly')) culture.push('Family-Friendly');
@@ -262,7 +356,6 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
         if (selectedTags.has('All-Inclusive Living')) culture.push('All-Inclusive Living');
 
         const dei = [];
-        // Map all DEI tags
         if (selectedTags.has('Pet-Friendly')) dei.push('Pet-Friendly');
         if (selectedTags.has('Wheelchair Accessible')) dei.push('Wheelchair Accessible');
         if (selectedTags.has('Main-Floor Bedroom')) dei.push('Main-Floor Bedroom');
@@ -338,21 +431,11 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
     const newSelectedTags = new Set(selectedTags);
     if (newSelectedTags.has(tag)) {
       newSelectedTags.delete(tag);
-      console.log('❌ Removed tag:', tag, 'New set:', Array.from(newSelectedTags));
     } else {
       newSelectedTags.add(tag);
-      console.log('✅ Added tag:', tag, 'New set:', Array.from(newSelectedTags));
     }
     setSelectedTags(newSelectedTags);
     setHasUnsavedChanges(true);
-  };
-
-  // Avatar functionality removed
-
-  const removeFavorite = (apartmentId: string) => {
-    const updatedFavorites = favorites.filter(apt => apt.id !== apartmentId);
-    setFavorites(updatedFavorites);
-    localStorage.setItem('padmatch-favorites', JSON.stringify(updatedFavorites));
   };
 
   const handleLogout = async () => {
@@ -391,7 +474,6 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
                       className="w-full h-full object-cover"
                     />
                   </div>
-                  {/* Avatar upload removed */}
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">{user.nickname || 'Your Name'}</h2>
@@ -514,9 +596,6 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
                 {/* Tags Section */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-gray-900">Preferences</h3>
-                  <div className="text-xs text-gray-500 mb-2">
-                    Debug: selectedTags = {Array.from(selectedTags).join(', ') || 'EMPTY'}
-                  </div>
                   
                   {Object.entries(tagCategories).map(([category, tags]) => (
                     <div key={category} className="border border-gray-200 rounded-lg p-4">
@@ -524,7 +603,6 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
                       <div className="flex flex-wrap gap-2">
                         {tags.map((tag) => {
                           const isSelected = selectedTags.has(tag);
-                          console.log(`🎨 Rendering tag "${tag}": ${isSelected ? 'SELECTED' : 'NOT SELECTED'}`);
                           return (
                           <button
                             key={tag}
@@ -571,45 +649,221 @@ export default function ProfilePage({ currentUser, onUserUpdate }: ProfilePagePr
             </div>
           </div>
 
-          {/* Right Column - Favorites */}
+          {/* Right Column - Apartment Search & Favorites */}
           <div className="bg-white rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              Your Favorite Apartments ({favorites.length})
-            </h3>
-            
-            {favorites.length === 0 ? (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">🏠</div>
-                <p className="text-gray-500">No favorite apartments yet</p>
-                <p className="text-sm text-gray-400 mt-2">Start hunting to add apartments to your favorites!</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {favorites.map((apartment) => (
-                  <div key={apartment.id} className="flex items-center space-x-4 p-4 border border-gray-200 rounded-lg">
-                    <img
-                      src={apartment.image || '/placeholder-apartment.jpg'}
-                      alt={apartment.name}
-                      className="w-16 h-16 rounded-lg object-cover"
+            {/* Tab Navigation */}
+            <div className="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+              <button
+                onClick={() => setActiveTab('search')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'search'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                🔍 Search Apartments
+              </button>
+              <button
+                onClick={() => setActiveTab('favorites')}
+                className={`flex-1 py-2 px-4 text-sm font-medium rounded-md transition-colors ${
+                  activeTab === 'favorites'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                ⭐ My Favorites ({favorites.length})
+              </button>
+            </div>
+
+            {/* Search Tab Content */}
+            {activeTab === 'search' && (
+              <>
+                {/* Search Input */}
+                <div className="mb-4">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Search by name, address, or description..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                      className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <div className="flex-1">
-                      <h4 className="font-medium text-gray-900">{apartment.name}</h4>
-                      <p className="text-sm text-gray-600">{apartment.address}</p>
-                      <p className="text-sm text-gray-700 font-medium">
-                        ${apartment.price}/month - {apartment.beds} Bed, {apartment.baths} Bath
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => removeFavorite(apartment.id)}
-                      className="text-gray-400 hover:text-red-500 transition-colors"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                       </svg>
-                    </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+                  {searchQuery && (
+                    <p className="text-sm text-gray-500 mt-2">
+                      {filteredApartments.length} result{filteredApartments.length !== 1 ? 's' : ''} found
+                    </p>
+                  )}
+                </div>
+                
+                {isLoadingApartments ? (
+                  <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="text-gray-500 mt-2">Loading apartments...</p>
+                  </div>
+                ) : apartments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">🏠</div>
+                    <p className="text-gray-500">No apartments found</p>
+                    <p className="text-sm text-gray-400 mt-2">Check your database connection or add some apartment complexes!</p>
+                  </div>
+                ) : filteredApartments.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">🔍</div>
+                    <p className="text-gray-500">No apartments match your search</p>
+                    <p className="text-sm text-gray-400 mt-2">Try searching for a different term</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {filteredApartments.map((apartment) => {
+                      const isFavorited = favorites.includes(apartment.id);
+                      return (
+                        <div key={apartment.id} className="group relative flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                          <img
+                            src={apartment.photos[0] || '/placeholder-apartment.jpg'}
+                            alt={apartment.name}
+                            className="w-16 h-16 rounded-lg object-cover"
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{apartment.name}</h4>
+                            <p className="text-sm text-gray-600">{apartment.address}</p>
+                            <p className="text-sm text-gray-700 font-medium">
+                              ${apartment.rent}/month - {apartment.bedrooms} Bed, {apartment.bathrooms} Bath
+                            </p>
+                            {/* VT-specific info */}
+                            <div className="flex items-center gap-2 mt-1">
+                              {apartment.distanceToVTCampus && (
+                                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                  📍 {apartment.distanceToVTCampus}mi to VT
+                                </span>
+                              )}
+                              {apartment.btAccess && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  🚌 BT Bus
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{apartment.description}</p>
+                          </div>
+                          <div className="flex flex-col space-y-1">
+                            {apartment.pros.slice(0, 2).map((pro, index) => (
+                              <span key={index} className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                                {pro}
+                              </span>
+                            ))}
+                          </div>
+                          
+                          {/* Favorite Star Button */}
+                          <button
+                            onClick={() => toggleFavorite(apartment.id)}
+                            className={`absolute top-2 right-2 p-1 rounded-full transition-all duration-200 group ${
+                              isFavorited 
+                                ? 'text-yellow-500 hover:text-yellow-600 opacity-100' 
+                                : 'text-gray-300 hover:text-yellow-500 opacity-0 group-hover:opacity-100'
+                            }`}
+                            title={isFavorited ? 'Remove from favorites' : 'Add to favorites'}
+                          >
+                            <svg 
+                              className={`w-5 h-5 ${isFavorited ? 'fill-current' : ''}`} 
+                              fill="none" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" 
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Favorites Tab Content */}
+            {activeTab === 'favorites' && (
+              <>
+                {favorites.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="text-6xl mb-4">⭐</div>
+                    <p className="text-gray-500">No favorites yet</p>
+                    <p className="text-sm text-gray-400 mt-2">Start favoriting apartments to see them here!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4 max-h-96 overflow-y-auto">
+                    {apartments
+                      .filter(apartment => favorites.includes(apartment.id))
+                      .map((apartment) => (
+                        <div key={apartment.id} className="group relative flex items-center space-x-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                          <img
+                            src={apartment.photos[0] || '/placeholder-apartment.jpg'}
+                            alt={apartment.name}
+                            className="w-16 h-16 rounded-lg object-cover"
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-medium text-gray-900">{apartment.name}</h4>
+                            <p className="text-sm text-gray-600">{apartment.address}</p>
+                            <p className="text-sm text-gray-700 font-medium">
+                              ${apartment.rent}/month - {apartment.bedrooms} Bed, {apartment.bathrooms} Bath
+                            </p>
+                            {/* VT-specific info */}
+                            <div className="flex items-center gap-2 mt-1">
+                              {apartment.distanceToVTCampus && (
+                                <span className="text-xs bg-orange-100 text-orange-800 px-2 py-1 rounded">
+                                  📍 {apartment.distanceToVTCampus}mi to VT
+                                </span>
+                              )}
+                              {apartment.btAccess && (
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  🚌 BT Bus
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">{apartment.description}</p>
+                          </div>
+                          <div className="flex flex-col space-y-1">
+                            {apartment.pros.slice(0, 2).map((pro, index) => (
+                              <span key={index} className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded">
+                                {pro}
+                              </span>
+                            ))}
+                          </div>
+                          
+                          {/* Favorite Star Button - Always filled since these are favorites */}
+                          <button
+                            onClick={() => toggleFavorite(apartment.id)}
+                            className="absolute top-2 right-2 p-1 rounded-full transition-all duration-200 text-yellow-500 hover:text-yellow-600 opacity-100"
+                            title="Remove from favorites"
+                          >
+                            <svg 
+                              className="w-5 h-5 fill-current" 
+                              fill="currentColor" 
+                              stroke="currentColor" 
+                              viewBox="0 0 24 24"
+                            >
+                              <path 
+                                strokeLinecap="round" 
+                                strokeLinejoin="round" 
+                                strokeWidth={2} 
+                                d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" 
+                              />
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

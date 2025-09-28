@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { SessionState, HuntSession, Roommate, Vote, Matchup, LobbySettings, Apartment } from '@/types';
-import { fetchApartments } from '@/lib/apartments';
+import { sampleApartments } from '@/data/apartments';
 
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(false);
@@ -17,21 +17,11 @@ export const useSocket = () => {
   
   const socketRef = useRef<Socket | null>(null);
 
-  // Fetch apartments from database on mount
+  // Load sample apartments for hunt sessions
   useEffect(() => {
-    const loadApartments = async () => {
-      try {
-        console.log('🔍 Frontend: Loading apartments from database...');
-        const apartments = await fetchApartments();
-        console.log(`✅ Frontend: Loaded ${apartments.length} apartments from database`);
-        setSessionState(prev => ({ ...prev, apartments }));
-      } catch (error) {
-        console.error('❌ Frontend: Failed to load apartments:', error);
-        // Keep empty array on error
-      }
-    };
-
-    loadApartments();
+    console.log('🔍 Frontend: Loading sample apartments for hunt sessions...');
+    setSessionState(prev => ({ ...prev, apartments: sampleApartments }));
+    console.log(`✅ Frontend: Loaded ${sampleApartments.length} sample apartments`);
   }, []);
 
   // Prefer unique by nickname (stable across reconnects), fallback to id

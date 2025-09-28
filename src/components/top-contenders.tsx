@@ -89,9 +89,23 @@ export const TopContenders = ({ session }: TopContendersProps) => {
                 )}
               </div>
               
-              <div className="flex items-center justify-between text-xs text-gray-600">
+              <div className="flex items-center justify-between text-xs text-gray-600 mb-2">
                 <span>${apartment.rent}/mo</span>
                 <span>{apartment.stats.wins}/{apartment.stats.totalMatches} wins</span>
+              </div>
+              
+              {/* VT-specific info badges */}
+              <div className="flex flex-wrap gap-1 mb-2">
+                {apartment.distanceToVTCampus && (
+                  <span className="bg-orange-100 text-orange-800 px-1.5 py-0.5 rounded text-xs">
+                    📍 {apartment.distanceToVTCampus}mi
+                  </span>
+                )}
+                {apartment.btAccess && (
+                  <span className="bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded text-xs">
+                    🚌 BT
+                  </span>
+                )}
               </div>
               
               <div className="mt-2">

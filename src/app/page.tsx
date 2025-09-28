@@ -51,7 +51,7 @@ export default function Home() {
       
       // Check if remember me is enabled first
       if (!authService.isRememberMeEnabled()) {
-        console.log('❌ Remember me is disabled, signing out user');
+        console.log('Remember me is disabled, signing out user');
         await authService.signOut();
         setIsAuthenticated(false);
         setIsLoading(false);
@@ -67,7 +67,7 @@ export default function Home() {
         setCurrentUser(user);
         setIsAuthenticated(true);
       } else {
-        console.log('❌ User is not authenticated:', error || 'No user found');
+        console.log('User is not authenticated:', error || 'No user found');
         setIsAuthenticated(false);
       }
       
@@ -95,7 +95,7 @@ export default function Home() {
 
     const handleError = ({ message }: { message: string }) => {
       if (message === 'Session not found') {
-        console.log('🚫 Session not found error received');
+        console.log('Session not found error received');
         
         // Clear stale session data
         try { localStorage.removeItem('padmatch-room-code'); } catch {}
@@ -108,7 +108,7 @@ export default function Home() {
         const code = (urlCode || savedCode || '').toUpperCase();
         
         if (code) {
-          console.log('🚫 Adding', code, 'to failed attempts list');
+          console.log('Adding', code, 'to failed attempts list');
           failedJoinAttemptsRef.current.add(code);
         }
       }
@@ -162,29 +162,29 @@ export default function Home() {
       return;
     }
     if (socketHook.sessionState.session?.code === code) {
-      console.log('✅ Already in session:', code);
+      console.log('Already in session:', code);
       autoJoinTriedRef.current = code;
       return;
     }
     if (!socketHook.sessionState.isConnected) {
-      console.log('❌ Socket not connected yet');
+      console.log('Socket not connected yet');
       return;
     }
     if (!currentUser?.nickname) {
-      console.log('❌ No current user nickname');
+      console.log('No current user nickname');
       return;
     }
     
     // Validate code format (should be 6 characters)
     if (code.length !== 6) {
-      console.log('❌ Invalid session code format:', code);
+      console.log('Invalid session code format:', code);
       try { localStorage.removeItem('padmatch-room-code'); } catch {}
       return;
     }
     
     // Try to join the room
     try {
-      console.log('🚀 Auto-joining session:', code, 'with user:', currentUser.nickname);
+      console.log('Auto-joining session:', code, 'with user:', currentUser.nickname);
       // @ts-ignore - access joinSession from hook
       (socketHook as any).joinSession?.(code, currentUser.nickname);
       autoJoinTriedRef.current = code;
@@ -234,7 +234,7 @@ export default function Home() {
   };
 
   const handleNavigateHome = () => {
-    console.log('🏠 Navigating to home - clearing session');
+    console.log('Navigating to home - clearing session');
     try { 
       (socketHook as any).leaveSession?.(); 
       localStorage.removeItem('padmatch-room-code');

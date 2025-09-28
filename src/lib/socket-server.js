@@ -1,4 +1,178 @@
 const { Server: SocketIOServer } = require('socket.io');
+const { createClient } = require('@supabase/supabase-js');
+
+// Load environment variables
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '../../.env.local') });
+
+// Initialize Supabase client
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error('❌ Missing Supabase environment variables for socket server');
+  console.error('Required: NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+}
+
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+// Helper function to save session to Supabase
+const saveSessionToSupabase = async (session) => {
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping database save');
+    return false;
+  }
+
+  try {
+    console.log('🏠 Saving session to Supabase:', session.code);
+    
+    const roomData = {
+      id: session.code, // Use code as the primary key
+      'Room Name': session.name,
+      Anon: true, // Default to anonymous
+      Rounds: 10 // Default rounds, will be updated when settings change
+    };
+
+    const { data, error } = await supabase
+      .from('room')
+      .insert([roomData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error saving session to Supabase:', error);
+      return false;
+    }
+
+    console.log('✅ Session saved successfully to Supabase:', data);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save session to Supabase:', error);
+    return false;
+  }
+};
+
+// Helper function to save room data to room table when voting starts
+const saveRoomToRoom2 = async (session) => {
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping room save');
+    return false;
+  }
+
+  try {
+    console.log('🏠 Saving room data to room table:', session.code);
+    
+    // Extract player nicknames from roommates
+    const players = session.roommates.map(roommate => roommate.nickname);
+    
+    // Get rounds from session settings (default to 10 if not set)
+    const rounds = session.settings?.numberOfRounds || 10;
+    
+    // Determine if anonymous (for now, default to true)
+    const anon = true;
+    
+    const roomData = {
+      id: session.code, // Use room code as UUID
+      players: players, // Array of player nicknames
+      rounds: rounds, // Number of rounds from settings
+      anon: anon // Anonymous flag
+    };
+
+    console.log('📊 Room data to save:', roomData);
+
+    const { data, error } = await supabase
+      .from('room')
+      .insert([roomData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error saving room to room table:', error);
+      return false;
+    }
+
+    console.log('✅ Room saved successfully to room table:', data);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save room to room table:', error);
+    return false;
+  }
+};
+
+// Helper function to save comparison decision to Supabase
+const saveComparisonToSupabase = async (sessionId, winningApartmentId, losingApartmentId) => {
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping comparison save');
+    return false;
+  }
+
+  try {
+    console.log('💾 Saving comparison to Supabase:', { sessionId, winningApartmentId, losingApartmentId });
+    console.log('💾 Data types:', { 
+      sessionId: typeof sessionId, 
+      winningApartmentId: typeof winningApartmentId, 
+      losingApartmentId: typeof losingApartmentId 
+    });
+    
+    const comparisonData = {
+      session_id: sessionId,
+      winning_apartment_id: winningApartmentId,
+      losing_apartment_id: losingApartmentId
+    };
+
+    const { data, error } = await supabase
+      .from('comparisons')
+      .insert([comparisonData])
+      .select()
+      .single();
+
+    if (error) {
+      console.error('❌ Error saving comparison to Supabase:', error);
+      return false;
+    }
+
+    console.log('✅ Comparison saved successfully to Supabase:', data);
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to save comparison to Supabase:', error);
+    return false;
+  }
+};
+
+// Helper function to update session settings in Supabase
+const updateSessionSettingsInSupabase = async (code, settings) => {
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, skipping database update');
+    return false;
+  }
+
+  try {
+    console.log('⚙️ Updating session settings in Supabase:', { code, settings });
+    
+    const updateData = {};
+
+    // Update rounds if numberOfRounds is provided
+    if (settings.numberOfRounds !== undefined) {
+      updateData.Rounds = settings.numberOfRounds;
+    }
+
+    const { error } = await supabase
+      .from('room')
+      .update(updateData)
+      .eq('id', code);
+
+    if (error) {
+      console.error('❌ Error updating session settings in Supabase:', error);
+      return false;
+    }
+
+    console.log('✅ Session settings updated successfully in Supabase');
+    return true;
+  } catch (error) {
+    console.error('❌ Failed to update session settings in Supabase:', error);
+    return false;
+  }
+};
 
 // Avatar generation function (inline since we can't import ES modules in CommonJS)
 const generateRoommateAvatar = (nickname, size = 80) => {
@@ -71,55 +245,7 @@ class ServerSessionStorage {
 const serverSessionStorage = new ServerSessionStorage();
 
 // Import apartments service
-const { fetchApartmentsServer } = require('./apartments-server.js');
-
-// Cache for apartments
-let cachedApartments = [];
-
-// Load apartments from database
-const loadApartments = async () => {
-  try {
-    cachedApartments = await fetchApartmentsServer();
-    console.log(`✅ Server: Loaded ${cachedApartments.length} apartments from database`);
-  } catch (error) {
-    console.error('❌ Server: Failed to load apartments from database:', error);
-    // Fallback to empty array
-    cachedApartments = [];
-  }
-};
-
-// Initialize apartments on server start
-loadApartments();
-
-// Function to get apartments for a session (random subset)
-const getSessionApartments = (allApartments) => {
-  // Configuration options for session size
-  const SESSION_SIZE_OPTIONS = {
-    SMALL: 8,    // 8 apartments = 7 rounds (2^3 + 1)
-    MEDIUM: 16,  // 16 apartments = 15 rounds (2^4 + 1) 
-    LARGE: 32,   // 32 apartments = 31 rounds (2^5 + 1)
-    HUGE: 64,    // 64 apartments = 63 rounds (2^6 + 1)
-    ALL: allApartments.length  // Use all apartments
-  };
-  
-  // Choose session size (you can change this to SMALL, MEDIUM, LARGE, HUGE, or ALL)
-  // SMALL = 8 apartments (7 rounds), MEDIUM = 16 apartments (15 rounds), LARGE = 32 apartments (31 rounds), HUGE = 64 apartments (63 rounds), ALL = use all apartments
-  const sessionSize = SESSION_SIZE_OPTIONS.LARGE; // Default to LARGE (32 apartments = 31 rounds)
-  
-  if (allApartments.length <= sessionSize) {
-    console.log(`📊 Using all ${allApartments.length} apartments for session`);
-    return [...allApartments];
-  }
-  
-  // Shuffle and take a random subset
-  const shuffled = [...allApartments].sort(() => Math.random() - 0.5);
-  const selectedApartments = shuffled.slice(0, sessionSize);
-  
-  console.log(`📊 Selected ${selectedApartments.length} random apartments from ${allApartments.length} total for session`);
-  return selectedApartments;
-};
-
-// Sample apartments data (fallback)
+// Import sample apartments for hunt sessions
 const sampleApartments = [
   {
     id: 'apt-1',
@@ -174,8 +300,238 @@ const sampleApartments = [
       '✗ No in-unit laundry'
     ],
     description: 'Spacious 2-bedroom, 2-bathroom apartment with stunning mountain views. Great for students with cars who don\'t mind the commute.'
-  }
+  },
+  {
+    id: 'apt-4',
+    name: 'The Mill',
+    address: '123 Mill Street, Blacksburg, VA 24060',
+    rent: 1200,
+    bedrooms: 2,
+    bathrooms: 1,
+    sqft: 950,
+    photos: [
+      'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop',
+      'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop'
+    ],
+    pros: [
+      '✓ 5-minute walk to Virginia Tech campus',
+      '✓ Recently renovated kitchen with granite countertops',
+      '✓ In-unit washer and dryer',
+      '✓ Pet-friendly with no breed restrictions',
+      '✓ Covered parking included'
+    ],
+    cons: [
+      '✗ Higher rent compared to similar units',
+      '✗ No central air conditioning',
+      '✗ Limited storage space',
+      '✗ Street parking can be difficult on game days'
+    ],
+    description: 'Modern 2-bedroom apartment in the heart of downtown Blacksburg, perfect for students who want to be close to campus and local amenities.'
+  },
+  {
+    id: 'apt-3',
+    name: 'The Mill',
+    address: '123 Mill Street, Blacksburg, VA 24060',
+    rent: 1200,
+    bedrooms: 2,
+    bathrooms: 1,
+    sqft: 950,
+    photos: [
+      'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop',
+      'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop'
+    ],
+    pros: [
+      '✓ 5-minute walk to Virginia Tech campus',
+      '✓ Recently renovated kitchen with granite countertops',
+      '✓ In-unit washer and dryer',
+      '✓ Pet-friendly with no breed restrictions',
+      '✓ Covered parking included'
+    ],
+    cons: [
+      '✗ Higher rent compared to similar units',
+      '✗ No central air conditioning',
+      '✗ Limited storage space',
+      '✗ Street parking can be difficult on game days'
+    ],
+    description: 'Modern 2-bedroom apartment in the heart of downtown Blacksburg, perfect for students who want to be close to campus and local amenities.'
+  },
 ];
+
+// Cache for apartments - use sample apartments for hunt sessions
+let cachedApartments = sampleApartments;
+
+// Function to fetch apartments from Supabase database
+const fetchApartmentsFromDatabase = async (numberOfRounds = 10) => {
+  if (!supabase) {
+    console.warn('⚠️ Supabase not configured, using sample apartments');
+    return getSessionApartments(sampleApartments, numberOfRounds);
+  }
+
+  try {
+    console.log('🔍 Fetching apartments from Supabase database...');
+    console.log(`📊 Requested rounds: ${numberOfRounds}`);
+    
+    // Calculate how many apartments we need
+    // N rounds = N apartments total (not N+1)
+    const apartmentsNeeded = numberOfRounds;
+    console.log(`📊 Apartments needed: ${apartmentsNeeded}`);
+    
+    // First, check how many apartments are available in the database
+    const { count, error: countError } = await supabase
+      .from('complex')
+      .select('*', { count: 'exact', head: true });
+    
+    if (countError) {
+      console.error('❌ Error checking apartment count:', countError);
+    } else {
+      console.log(`📊 Total apartments in database: ${count}`);
+    }
+    
+    // Fetch apartments from the database with random ordering
+    const { data, error } = await supabase
+      .from('complex')
+      .select('*')
+      .limit(Math.max(apartmentsNeeded * 3, 50)); // Get more than needed to ensure we have enough
+    
+    if (error) {
+      console.error('❌ Error fetching apartments from database:', error);
+      console.log('🔄 Falling back to sample apartments');
+      return getSessionApartments(sampleApartments, numberOfRounds);
+    }
+
+    if (!data || data.length === 0) {
+      console.warn('⚠️ No apartments found in database, using sample apartments');
+      return getSessionApartments(sampleApartments, numberOfRounds);
+    }
+
+    console.log(`✅ Found ${data.length} apartments in database`);
+
+    // Map database data to apartment format
+    const apartments = data.map((complex) => ({
+      id: complex.id || `complex-${Math.random().toString(36).substr(2, 9)}`,
+      name: complex.name || 'Apartment Complex',
+      address: complex.address || 'Address not available',
+      rent: parsePriceRange(complex['price range']),
+      bedrooms: parseBedroomRange(complex['bedroom range']),
+      bathrooms: parseBathroomRange(complex['bathroom range']),
+      sqft: 1000, // Default since not specified in database
+      photos: [
+        'https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&h=600&fit=crop&auto=format&q=80',
+        'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=800&h=600&fit=crop&auto=format&q=80'
+      ],
+      pros: generatePros(complex),
+      cons: generateCons(complex),
+      description: generateDescription(complex)
+    }));
+
+    console.log(`📊 Mapped ${apartments.length} apartments from database data`);
+    console.log(`📊 Apartments needed: ${apartmentsNeeded}, Available: ${apartments.length}`);
+
+    // Check if we have enough apartments
+    if (apartments.length < apartmentsNeeded) {
+      console.warn(`⚠️ Not enough apartments in database (${apartments.length} < ${apartmentsNeeded})`);
+      console.log('🔄 Falling back to sample apartments');
+      return getSessionApartments(sampleApartments, numberOfRounds);
+    }
+
+    // Shuffle and select the needed number
+    const shuffled = [...apartments].sort(() => Math.random() - 0.5);
+    const selectedApartments = shuffled.slice(0, apartmentsNeeded);
+    
+    console.log(`📊 Selected ${selectedApartments.length} apartments for ${numberOfRounds} rounds from database`);
+    console.log(`📊 Selected apartment IDs: ${selectedApartments.map(apt => apt.id).join(', ')}`);
+    return selectedApartments;
+    
+  } catch (error) {
+    console.error('❌ Failed to fetch apartments from database:', error);
+    console.log('🔄 Falling back to sample apartments');
+    return getSessionApartments(sampleApartments, numberOfRounds);
+  }
+};
+
+// Helper function to parse price range
+const parsePriceRange = (priceRange) => {
+  if (!priceRange) return 1000;
+  const numbers = priceRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  return 1000;
+};
+
+// Helper function to parse bedroom range
+const parseBedroomRange = (bedroomRange) => {
+  if (!bedroomRange) return 2;
+  const numbers = bedroomRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  return 2;
+};
+
+// Helper function to parse bathroom range
+const parseBathroomRange = (bathroomRange) => {
+  if (!bathroomRange) return 1;
+  const numbers = bathroomRange.match(/\d+/g);
+  if (numbers && numbers.length >= 2) {
+    const min = parseInt(numbers[0]);
+    const max = parseInt(numbers[1]);
+    return Math.round((min + max) / 2);
+  } else if (numbers && numbers.length === 1) {
+    return parseInt(numbers[0]);
+  }
+  return 1;
+};
+
+// Helper function to generate pros
+const generatePros = (complex) => {
+  const pros = [];
+  if (complex.amenities) pros.push(`✓ ${complex.amenities}`);
+  if (complex.location) pros.push(`✓ ${complex.location}`);
+  if (complex.features) pros.push(`✓ ${complex.features}`);
+  return pros.length > 0 ? pros : ['✓ Good location', '✓ Affordable rent'];
+};
+
+// Helper function to generate cons
+const generateCons = (complex) => {
+  const cons = [];
+  if (complex.issues) cons.push(`✗ ${complex.issues}`);
+  if (complex.limitations) cons.push(`✗ ${complex.limitations}`);
+  return cons.length > 0 ? cons : ['✗ Limited parking', '✗ Older building'];
+};
+
+// Helper function to generate description
+const generateDescription = (complex) => {
+  return complex.description || `${complex.name} - A great place to live with modern amenities and convenient location.`;
+};
+
+// Function to get apartments for a session (fallback for sample data)
+const getSessionApartments = (allApartments, numberOfRounds = 10) => {
+  // Calculate how many apartments we need based on the number of rounds
+  // N rounds = N apartments total (not N+1)
+  const apartmentsNeeded = numberOfRounds;
+  
+  if (allApartments.length <= apartmentsNeeded) {
+    console.log(`📊 Using all ${allApartments.length} apartments for ${numberOfRounds} rounds`);
+    return [...allApartments];
+  }
+  
+  // Shuffle and take a random subset
+  const shuffled = [...allApartments].sort(() => Math.random() - 0.5);
+  const selectedApartments = shuffled.slice(0, apartmentsNeeded);
+  
+  console.log(`📊 Selected ${selectedApartments.length} apartments for ${numberOfRounds} rounds`);
+  return selectedApartments;
+};
+
 
 function initializeSocketServer(io) {
   // Map socket IDs to user IDs
@@ -201,24 +557,7 @@ function initializeSocketServer(io) {
       const code = generateSessionCode();
       const userId = `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       
-      const session = {
-        id: sessionId,
-        code,
-        name: `${nickname}'s Hunt`, // Default room name
-        hostId: userId, // Track the host user ID
-        roommates: [{
-          id: userId,
-          nickname,
-          avatar: generateRoommateAvatar(nickname),
-          isOnline: true,
-          joinedAt: new Date()
-        }],
-        currentMatchup: null, // No matchup until host starts
-        availableApartments: getSessionApartments(cachedApartments.length > 0 ? cachedApartments : sampleApartments), // Use database apartments or fallback
-        eliminatedApartments: [],
-        matchupLog: [],
-        championApartment: null,
-        settings: {
+      const defaultSettings = {
           // Voting settings
           requireUnanimousVoting: false,
           allowVetoOverride: true,
@@ -240,8 +579,31 @@ function initializeSocketServer(io) {
           
           // Notification preferences
           notifyOnNewRatings: true,
-          notifyOnVetos: true
-        },
+        notifyOnVetos: true,
+        
+        // Tournament settings
+        numberOfRounds: 10 // Default number of rounds
+      };
+
+      const session = {
+        id: sessionId,
+        code,
+        name: `${nickname}'s Hunt`, // Default room name
+        hostId: userId, // Track the host user ID
+        roommates: [{
+          id: userId,
+          nickname,
+          avatar: generateRoommateAvatar(nickname),
+          isOnline: true,
+          joinedAt: new Date()
+        }],
+        currentMatchup: null, // No matchup until host starts
+        availableApartments: [], // Will be populated asynchronously
+        eliminatedApartments: [],
+        matchupLog: [],
+        championApartment: null,
+        currentRound: 0, // Track current round number
+        settings: defaultSettings,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -254,6 +616,49 @@ function initializeSocketServer(io) {
       console.log('Server: Session created - mapped socket', socket.id, 'to user', userId);
       
       console.log('Server: Session created with code', code);
+      
+      // Fetch apartments from database asynchronously
+      console.log(`🔍 Starting apartment fetch for session ${sessionId} with ${defaultSettings.numberOfRounds} rounds`);
+      fetchApartmentsFromDatabase(defaultSettings.numberOfRounds).then(apartments => {
+        // Update the session with fetched apartments
+        const updatedSession = serverSessionStorage.getSession(sessionId);
+        if (updatedSession) {
+          updatedSession.availableApartments = apartments;
+          serverSessionStorage.updateSession(updatedSession);
+          console.log(`📊 Session ${sessionId} updated with ${apartments.length} apartments from database`);
+          console.log(`📊 Available apartments: ${apartments.map(apt => apt.id).join(', ')}`);
+          
+          // Broadcast updated session to all clients
+          io.to(sessionId).emit('session-updated', { session: updatedSession });
+        } else {
+          console.error(`❌ Session ${sessionId} not found when trying to update apartments`);
+        }
+      }).catch(error => {
+        console.error('❌ Failed to fetch apartments from database:', error);
+        // Fallback to sample apartments
+        const updatedSession = serverSessionStorage.getSession(sessionId);
+        if (updatedSession) {
+          const fallbackApartments = getSessionApartments(sampleApartments, defaultSettings.numberOfRounds);
+          updatedSession.availableApartments = fallbackApartments;
+          serverSessionStorage.updateSession(updatedSession);
+          console.log(`📊 Session ${sessionId} updated with ${fallbackApartments.length} sample apartments`);
+          console.log(`📊 Fallback apartments: ${fallbackApartments.map(apt => apt.id).join(', ')}`);
+          
+          // Broadcast updated session to all clients
+          io.to(sessionId).emit('session-updated', { session: updatedSession });
+        } else {
+          console.error(`❌ Session ${sessionId} not found when trying to update with fallback apartments`);
+        }
+      });
+      
+      // Save session to Supabase
+      saveSessionToSupabase(session).then(success => {
+        if (success) {
+          console.log('✅ Session successfully saved to Supabase');
+        } else {
+          console.warn('⚠️ Failed to save session to Supabase, but session is still active');
+        }
+      });
       
       socket.emit('session-created', {
         session,
@@ -501,6 +906,21 @@ function initializeSocketServer(io) {
             currentSession.currentMatchup.status = status;
             currentSession.currentMatchup.completedAt = new Date();
             
+            // Save comparison decision to Supabase if there's a winner
+            if (winnerId && status === 'completed') {
+              const losingApartmentId = winnerId === currentSession.currentMatchup.leftApartment.id 
+                ? currentSession.currentMatchup.rightApartment.id 
+                : currentSession.currentMatchup.leftApartment.id;
+              
+              saveComparisonToSupabase(currentSession.code, winnerId, losingApartmentId).then(success => {
+                if (success) {
+                  console.log('✅ Comparison decision saved to Supabase');
+                } else {
+                  console.warn('⚠️ Failed to save comparison to Supabase, but tournament continues');
+                }
+              });
+            }
+            
             // Log the matchup
             const matchupLog = {
               matchupId: currentSession.currentMatchup.id,
@@ -527,10 +947,23 @@ function initializeSocketServer(io) {
               // Update champion to the current winner
               currentSession.championApartment = winner;
               
-              // Create next matchup if apartments remain
+              // Check if we've reached the maximum number of rounds
+              const maxRounds = currentSession.settings?.numberOfRounds || 10;
+              
+              console.log(`🔍 Tournament check: Round ${currentSession.currentRound}/${maxRounds}, Apartments left: ${currentSession.availableApartments.length}`);
+              console.log(`🔍 Remaining apartments: ${currentSession.availableApartments.map(apt => apt.id).join(', ')}`);
+              
+              if (currentSession.currentRound < maxRounds) {
+                // Create next matchup if we haven't reached max rounds
               if (currentSession.availableApartments.length > 0) {
                 const nextApartment = currentSession.availableApartments.shift();
                 const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+                  
+                  // Increment round counter when new apartment is introduced
+                  currentSession.currentRound++;
+                  
+                  console.log(`🏁 Next matchup: ${currentSession.championApartment.id} vs ${nextApartment.id}`);
+                  console.log(`🏁 Remaining apartments after shift: ${currentSession.availableApartments.length}`);
                 
                 currentSession.currentMatchup = {
                   id: nextMatchupId,
@@ -540,9 +973,18 @@ function initializeSocketServer(io) {
                   status: 'active',
                   createdAt: new Date()
                 };
+                  
+                  console.log(`Server: Round ${currentSession.currentRound}/${maxRounds} - Next matchup created`);
             } else {
-              // Tournament complete - winner becomes final champion
-              console.log('Server: Tournament completed, setting champion:', winner);
+                  // No more apartments but haven't reached max rounds - tournament complete
+                  console.log(`❌ Tournament completed - no more apartments after ${currentSession.currentRound} rounds (max: ${maxRounds})`);
+                  console.log(`❌ This means we ran out of apartments too early!`);
+                  currentSession.championApartment = winner;
+                  currentSession.currentMatchup = null;
+                }
+              } else {
+                // Tournament complete - max rounds reached
+                console.log(`✅ Tournament completed after ${currentSession.currentRound} rounds (max: ${maxRounds}), setting champion:`, winner);
               currentSession.championApartment = winner;
               currentSession.currentMatchup = null;
             }
@@ -698,9 +1140,19 @@ function initializeSocketServer(io) {
 
       // Create first matchup if none exists
       if (!session.currentMatchup && session.availableApartments.length >= 2) {
+        // Initialize round counter to 1 for the first matchup
+        // Round 1 = first matchup (2 apartments)
+        session.currentRound = 1;
+        
+        console.log(`🏁 Tournament starting with ${session.availableApartments.length} apartments`);
+        console.log(`🏁 Available apartments: ${session.availableApartments.map(apt => apt.id).join(', ')}`);
+        
         const matchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         const firstApartment = session.availableApartments.shift();
         const secondApartment = session.availableApartments.shift();
+        
+        console.log(`🏁 First matchup: ${firstApartment.id} vs ${secondApartment.id}`);
+        console.log(`🏁 Remaining apartments: ${session.availableApartments.length}`);
         
         session.currentMatchup = {
           id: matchupId,
@@ -710,6 +1162,26 @@ function initializeSocketServer(io) {
           status: 'active',
           createdAt: new Date()
         };
+        
+        console.log(`Server: Tournament started - Round 1/${session.settings.numberOfRounds || 10}`);
+        
+        // Save room data to room table when voting officially starts
+        console.log('🚀 Starting to save room data to room table...');
+        console.log('📊 Session data:', {
+          code: session.code,
+          roommates: session.roommates.map(r => r.nickname),
+          rounds: session.settings?.numberOfRounds || 10
+        });
+        
+        saveRoomToRoom2(session).then(success => {
+          if (success) {
+            console.log('✅ Room data saved to room table successfully');
+          } else {
+            console.warn('⚠️ Failed to save room data to room table');
+          }
+        }).catch(error => {
+          console.error('❌ Error saving room data:', error);
+        });
         
         serverSessionStorage.updateSession(session);
         
@@ -747,6 +1219,19 @@ function initializeSocketServer(io) {
       session.currentMatchup.status = 'completed';
       session.currentMatchup.completedAt = new Date();
       
+      // Save comparison decision to Supabase for host tiebreak
+      const losingApartmentId = winnerId === session.currentMatchup.leftApartment.id 
+        ? session.currentMatchup.rightApartment.id 
+        : session.currentMatchup.leftApartment.id;
+      
+      saveComparisonToSupabase(session.code, winnerId, losingApartmentId).then(success => {
+        if (success) {
+          console.log('✅ Host tiebreak comparison saved to Supabase');
+        } else {
+          console.warn('⚠️ Failed to save host tiebreak comparison to Supabase, but tournament continues');
+        }
+      });
+      
       // Update champion to the current winner
       session.championApartment = winnerId === session.currentMatchup.leftApartment.id 
         ? session.currentMatchup.leftApartment 
@@ -762,6 +1247,9 @@ function initializeSocketServer(io) {
       if (session.availableApartments.length > 0) {
         const nextApartment = session.availableApartments.shift();
         const nextMatchupId = `matchup-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        // Increment round counter when new apartment is introduced
+        session.currentRound++;
         
         session.currentMatchup = {
           id: nextMatchupId,
@@ -805,6 +1293,15 @@ function initializeSocketServer(io) {
       session.updatedAt = new Date();
       
       serverSessionStorage.updateSession(session);
+      
+      // Save settings update to Supabase
+      updateSessionSettingsInSupabase(session.code, settings).then(success => {
+        if (success) {
+          console.log('✅ Settings successfully updated in Supabase');
+        } else {
+          console.warn('⚠️ Failed to update settings in Supabase, but session is still updated');
+        }
+      });
       
       // Broadcast settings update to all clients in the session
       io.to(session.id).emit('settings-updated', { settings: session.settings });

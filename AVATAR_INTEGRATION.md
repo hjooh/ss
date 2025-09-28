@@ -1,6 +1,6 @@
 # DiceBear Thumbs Avatar Integration
 
-This document describes the integration of [DiceBear Thumbs](https://www.dicebear.com/styles/thumbs/) avatars throughout the PadMatch application.
+This document describes the integration of [DiceBear Thumbs](https://www.dicebear.com/styles/thumbs/) avatars throughout the SuiteSync application.
 
 ## Overview
 

@@ -10,6 +10,9 @@ export interface Apartment {
   pros: string[];
   cons: string[];
   description: string;
+  // VT-specific fields
+  btAccess?: boolean;
+  distanceToVTCampus?: number | null;
 }
 
 export interface Complex {

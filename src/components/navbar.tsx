@@ -51,16 +51,20 @@ export const Navbar = ({ currentUser, onLogout, onNavigateHome }: NavbarProps) =
   };
 
   return (
-    <nav className="bg-white border-b border-gray-200 sticky top-0 z-50">
+    <nav className="bg-transparent absolute top-0 left-0 right-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <div className="flex items-center">
             <button
               onClick={handleHomeClick}
-              className="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors"
+              className="hover:opacity-80 transition-opacity"
             >
-              PadMatch
+              <img 
+                src="/logo.png" 
+                alt="SuiteSync" 
+                className="h-15 w-auto"
+              />
             </button>
           </div>
 
